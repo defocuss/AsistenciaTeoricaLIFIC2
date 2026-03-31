@@ -51,7 +51,7 @@ Col1, Col2, Col3 = st.columns(3)
 
 #if st.theme() == 'light':
 
-Col2.image('https://i.imgur.com/YMei8p1.png',use_column_width='auto')
+Col2.image('https://i.imgur.com/YMei8p1.png',use_container_width = True)
 
 # else:
 
@@ -74,7 +74,7 @@ if (asistenciaFile and registroFile) is not None: #Varificar si se suben los arc
     #Trabajo de analisis de datos Pandas
 
     asistencia = pd.read_csv(asistenciaFile, header=None)
-    registro = pd.read_csv(registroFile, header=None)
+    registro = pd.read_csv(registroFile, header=None, skiprows = 2)
 
     if verificar1(asistencia) or verificar2(registro): #Verifica el formato de los csv subidos
 
@@ -176,26 +176,26 @@ if (asistenciaFile and registroFile) is not None: #Varificar si se suben los arc
 
             if asignatura == "A1":
 
-                modulo = st.selectbox("Módulo", ("1"))
+                modulo = st.selectbox("Módulo", ("1", "2"))
 
             if asignatura == "A2":
 
-                modulo = st.selectbox("Módulo", ("1", "2"))
+                modulo = st.selectbox("Módulo", ("1"))
 
             if asignatura == "A3":
 
-                modulo = st.selectbox("Módulo", ("1"))
+                modulo = st.selectbox("Módulo", ("1", "2"))
 
             if asignatura == "A4":
 
-                modulo = st.selectbox("Módulo", ("1", "x"))
+                modulo = st.selectbox("Módulo", ("Mati", "Bryan", "x-Mati", "x-Bryan"))
 
 
         with colClase:
 
             if asignatura == "A1":
 
-                clase = st.selectbox("Clase", ("01", "02", "04", "06", "08", "10", "12", "14", "16", "18", "20", "22", "24", "26", "28"))
+                clase = st.selectbox("Clase", ("01", "03", "05", "07", "09", "11", "13", "15", "17", "19", "21", "23", "25", "27", "29", "31"))
 
             if asignatura == "A2":
 
@@ -207,13 +207,13 @@ if (asistenciaFile and registroFile) is not None: #Varificar si se suben los arc
 
             if asignatura == "A4":
 
-                if modulo == "x":
+                if modulo == "x-Mati" or modulo == "x-Bryan":
 
-                    clase = st.selectbox("Clase", ("02", "05", "08", "11", "14", "17", "20", "23", "26", "29", "32", "34", "37", "40", "43"))
+                    clase = st.selectbox("Clase", ("02", "05", "08", "11", "14", "17", "20", "23", "26", "29", "32", "37", "40", "43"))
 
                 else:
                     
-                    clase = st.selectbox("Clase", ("01", "04", "07", "10", "13", "16", "19", "22", "25", "28", "31", "33", "36", "39", "42"))
+                    clase = st.selectbox("Clase", ("01", "04", "07", "10", "13", "16", "19", "22", "25", "28", "31", "34", "36", "39", "42"))
 
         with st.spinner("Subiendo Datos, por favor esperar"):
 
@@ -221,17 +221,23 @@ if (asistenciaFile and registroFile) is not None: #Varificar si se suben los arc
 
                 if asignatura == "A1" and modulo == "1":
                     sheet = client.open_by_url(st.secrets["A1modulo1"])
+                elif asignatura == 'A1' and modulo == "2":
+                    sheet = client.open_by_url(st.secrets["A1modulo2"])
                 elif asignatura == "A2" and modulo == "1":
                     sheet = client.open_by_url(st.secrets["A2modulo1"])
                 elif asignatura == "A2" and modulo == "2":
                     sheet = client.open_by_url(st.secrets["A2modulo2"])
                 elif asignatura == "A3" and modulo == "1":
                     sheet = client.open_by_url(st.secrets["A3modulo1"])
-                elif asignatura == "A4" and modulo == "1":
-                    sheet = client.open_by_url(st.secrets["A4modulo1"])
-                elif asignatura == "A4" and modulo == "x":
-                    sheet = client.open_by_url(st.secrets["A4modulox"])
-
+                elif asignatura == "A4" and modulo == "Mati":
+                    sheet = client.open_by_url(st.secrets["A4moduloMati"])
+                elif asignatura == "A4" and modulo == "Bryan":
+                    sheet = client.open_by_url(st.secrets["A4moduloBryan"])
+                elif asignatura == "A4" and modulo == "x-Mati":
+                    sheet = client.open_by_url(st.secrets["A4moduloxMati"])
+                elif asignatura == "A4" and modulo == "x-Bryan":
+                    sheet = client.open_by_url(st.secrets["A4moduloxBryan"])
+                
                 worksheet_list = sheet.worksheets()
 
                 claseWS = "Clase {}".format(clase)
