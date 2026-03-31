@@ -6,27 +6,28 @@ import gspread_dataframe as gd
 import plotly.express as px
 from PIL import Image
 
+# Entrega el cliente
+def gs_connect():
+    # Credenciales de google cloud
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=[
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ],
+    )
 
-# Connect to Google Sheets
-
-credentials = service_account.Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=[
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ],
-)
+    # Construir el cliente con las credenciales
+    client = gspread.authorize(credentials=credentials)
+    return client
 
 
-client = gspread.authorize(credentials=credentials)
-
-
-#Funciones
-
+# Convertir dataframe a csv
 def convert_df(df):
    return df.to_csv(index=False).encode('utf-8')
 
-def verificar1(data):
+# Verificar archivo asistencia
+def verify_asistance(data):
 
     valor = [data.iloc[0,0]]
 
@@ -35,7 +36,8 @@ def verificar1(data):
     else:
         return 0
 
-def verificar2(data):
+# Verificar archivo registro
+def verify_registration(data):
 
     valor = [data.iloc[0,0]]
 
@@ -76,7 +78,7 @@ if (asistenciaFile and registroFile) is not None: #Varificar si se suben los arc
     asistencia = pd.read_csv(asistenciaFile, header=None)
     registro = pd.read_csv(registroFile, header=None, skiprows = 2)
 
-    if verificar1(asistencia) or verificar2(registro): #Verifica el formato de los csv subidos
+    if verify_asistance(asistencia) or verify_registration(registro): #Verifica el formato de los csv subidos
 
         duracionTotal = [asistencia.iloc[1,3]]
         maximo =  int(duracionTotal[0])
@@ -218,7 +220,7 @@ if (asistenciaFile and registroFile) is not None: #Varificar si se suben los arc
         with st.spinner("Subiendo Datos, por favor esperar"):
 
             if st.button('Subir datos'):
-
+                client = gs_connect()
                 if asignatura == "A1" and modulo == "1":
                     sheet = client.open_by_url(st.secrets["A1modulo1"])
                 elif asignatura == 'A1' and modulo == "2":
