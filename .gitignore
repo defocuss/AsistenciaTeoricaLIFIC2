@@ -1,4 +1,5 @@
 Archivos
-secret.toml
-secrets.toml
+.streamlit/
+csv/
 .idea/
+.DS_Store
