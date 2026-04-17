@@ -9,7 +9,7 @@ def main():
     meeting_files = attendance_uploader()
 
     if st.button("Mergear archivos") and meeting_files:
-        merged_handler(meeting_files[0][0], meeting_files[0][1])
+        merged_handler(meeting_files)
 
  
 def show_meeting_files_table(meeting_files: list) -> None:
@@ -100,6 +100,7 @@ def read_csv_date(file) -> str:
 
     return date
 
+# Reformatear la fecha para que sea igual en ambos archivos y se pueda comparar, el formato de fecha puede variar dependiendo del idioma del usuario, por eso se hace esta funcion para estandarizarlo a un formato unico y poder comparar las fechas de ambos archivos
 def reformat_date(date:str) -> list:
     date_parts = date.split(" ")
     real_date = date_parts[0].split("/")
@@ -152,18 +153,21 @@ def get_same_meeting_files(files:list) -> list:
 
 # Obtener un diccionario de la informacion de la reunion, duracion, minimo para presente, fecha y el profesor
 def get_reunion_data(attendance_file) -> dict:
-    duration = attendance_file.iloc[1,3] # Duracion de la reunion
+    attendance_file.seek(0)
+    attendance = pd.read_csv(attendance_file, header=None)
+    duration = attendance.iloc[1,3] # Duracion de la reunion
     minimum_presentent_duration = int(duration)*0.9*0.5 # Minimo de duracion para quedar presente
-    date = [attendance_file.iloc[1,4]]
+    date = [attendance.iloc[1,4]]
     date = date[0]
-    id_reunion = attendance_file.iloc[1,1]
+    id_reunion = attendance.iloc[1,1]
 
     reunion_data = {"Duracion": duration, "Minimun": minimum_presentent_duration, "Date": date, "ID": id_reunion}
     return reunion_data
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
 def get_attendance_data(attendance_file):
-    attendance_data = attendance_file.iloc[3:, [1, 2, 3]]
+    attendance = pd.read_csv(attendance_file, header=None)
+    attendance_data = attendance.iloc[3:, [1, 2, 3]]
     attendance_data = attendance_data[attendance_data[3] != "No"]
     attendance_data = attendance_data[[1, 2]]
     attendance_data.rename(columns={1:"Correo", 2:"Tiempo"}, inplace = True)
@@ -173,23 +177,35 @@ def get_attendance_data(attendance_file):
 
 # Obtener los datos de registro, nombre apellido, matricula y correo
 def get_registration_data(registration_file):
-    registration_data = registration_file.iloc[5:,[0,1,2,5]] # Se obtienen los datos de los estudiantes nombre, apellido, matricula y correo
+    registration = pd.read_csv(registration_file, header=None, skiprows=2)
+    registration_data = registration.iloc[5:,[0,1,2,5]] # Se obtienen los datos de los estudiantes nombre, apellido, matricula y correo
     registration_data.rename(columns={0:"Nombre", 1:"Apellido", 2:"Correo", 5:"Matrícula"}, inplace = True)
     registration_data["Correo"] = registration_data["Correo"].str.lower()
     return registration_data
 
+
 # Unir los datos de asistencia y registro
-def merge_data (attendance_file,registration_file):
-    attendance_data = get_attendance_data(attendance_file)
-    registration_data = get_registration_data(registration_file)
-    merge_data= pd.merge(attendance_data, registration_data, how = "outer", on="Correo")
-    merge_data = merge_data.reindex(columns=["Correo", "Matrícula", "Nombre", "Apellido", "Tiempo"])
+def merge_data(files:list):
+    attendance_data = None
+    registration_data = None
+    merge_data = None
+    for file_pair in files:
+        file_pair[0].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
+        file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
+        attendance_data = get_attendance_data(file_pair[0])
+        registration_data = get_registration_data(file_pair[1])
+        var_merge_data= pd.merge(attendance_data, registration_data, how = "outer", on="Correo")
+        var_merge_data = var_merge_data.reindex(columns=["Correo", "Matrícula", "Nombre", "Apellido", "Tiempo"])
+        if merge_data is None:
+            merge_data = var_merge_data
+        else:
+            merge_data = pd.concat([merge_data, var_merge_data], ignore_index=True)
     return merge_data
 
 # Unir la informacion
-def write_merge_data(attendance_file, registration_file) -> bool:
-    merged_data = merge_data(attendance_file, registration_file)
-    reunion_data = get_reunion_data(attendance_file)
+def write_merge_data(files:list) -> bool:
+    merged_data = merge_data(files)
+    reunion_data = get_reunion_data(files[0][0])
     reunion_id = reunion_data['ID']
     merged_data.to_csv(f'Archivos/merge_data_{reunion_id}.csv', index=False, encoding='utf-8')
 
@@ -198,13 +214,12 @@ def write_merge_data(attendance_file, registration_file) -> bool:
     return False
 
 # Manejar la logica de mergear los archivos y mostrar el resultado
-def merged_handler(attendance_file, registration_file) -> bool:
-    attendance_file.seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
-    registration_file.seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
-    attendance = pd.read_csv(attendance_file, header=None)
-    registration = pd.read_csv(registration_file, header=None, skiprows=2)
-    if write_merge_data(attendance, registration):
-        show_merged_csv(f'Archivos/merge_data_{get_reunion_data(attendance)["ID"]}.csv', "Alumnos", "Archivo mergeado creado exitosamente.")
+def merged_handler(files:list) -> bool:
+    for file_pair in files:
+        file_pair[0].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
+        file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
+    if write_merge_data(files):
+        show_merged_csv(f'Archivos/merge_data_{get_reunion_data(files[0][0])["ID"]}.csv', "Alumnos", "Archivo mergeado creado exitosamente.")
         return True
     else:
         st.write("Error al crear el archivo mergeado.")
