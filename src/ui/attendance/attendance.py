@@ -77,11 +77,26 @@ def date_checker(files:list) -> bool:
     date = ""
     for file in files:
         if date == "":
-            date = file.name.split("_")[2]+"/"+file.name.split("_")[3]+"/"+file.name.split("_")[4]
-        elif date != file.name.split("_")[2]+"/"+file.name.split("_")[3]+"/"+file.name.split("_")[4]:
+            date = read_csv_date(file)
+        elif date != read_csv_date(file):
             st.write("Los archivos subidos no corresponden a la misma fecha.")
             return False
     return True
+
+# Leer la fecha del archivo para la verificacion de que ambos archivos corresponden a la misma reunion
+def read_csv_date(file) -> str:
+    date = ""
+    file.seek(0)
+    if file.name.split("_")[0] == "participants":
+        data = pd.read_csv(file, header=None)
+        file.seek(0)
+        date = [data.iloc[1,4]]
+    elif file.name.split("_")[0] == "registration":
+        data = pd.read_csv(file, header=None, skiprows=2)
+        file.seek(0)
+        date = [data.iloc[1,2]]
+
+    return date[0].split(" ")[0]
 
 # Chekea el formato del archivo
 def format_checker(file) -> bool:
@@ -127,20 +142,18 @@ def get_same_meeting_files(files:list) -> list:
 
 # Obtener un diccionario de la informacion de la reunion, duracion, minimo para presente, fecha y el profesor
 def get_reunion_data(attendance_file) -> dict:
-    duration = [attendance_file.iloc[1,3]] # Duracion de la reunion
-    minimum_presentent_duration = int(duration[0])*0.9*0.5 # Minimo de duracion para quedar presente
+    duration = attendance_file.iloc[1,3] # Duracion de la reunion
+    minimum_presentent_duration = int(duration)*0.9*0.5 # Minimo de duracion para quedar presente
     date = [attendance_file.iloc[1,4]]
     date = date[0]
-    professor = attendance_file[attendance_file[3] == "No"].iloc[0] # El profesor es el unico que no es invitado
-    professor =  professor[0] # Nombre del profesor de la reunion
     id_reunion = attendance_file.iloc[1,1]
 
-    reunion_data = {"Duracion": duration, "Minimun": minimum_presentent_duration, "Date": date, "Profesor": professor, "ID": id_reunion}
-
+    reunion_data = {"Duracion": duration, "Minimun": minimum_presentent_duration, "Date": date, "ID": id_reunion}
     return reunion_data
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
 def get_attendance_data(attendance_file):
+    attendance_data = attendance_data[attendance_data[3] != "No"] #Se quita el creador de la reunion
     attendance_data = attendance_file.iloc[3:, [1, 2, 3]]
     attendance_data = attendance_data[attendance_data[3] != "No"]
     attendance_data = attendance_data[[1, 2]]
