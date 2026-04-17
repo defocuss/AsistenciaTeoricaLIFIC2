@@ -8,7 +8,7 @@ def main():
     st.write("Aquí puedes gestionar la asistencia de los estudiantes.")
     meeting_files = attendance_uploader()
 
-    if st.button("Mergear archivos"):
+    if st.button("Mergear archivos") and meeting_files:
         merged_handler(meeting_files[0][0], meeting_files[0][1])
 
  
