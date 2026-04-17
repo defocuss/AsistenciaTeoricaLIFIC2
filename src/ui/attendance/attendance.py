@@ -91,12 +91,22 @@ def read_csv_date(file) -> str:
         data = pd.read_csv(file, header=None)
         file.seek(0)
         date = [data.iloc[1,4]]
+        date = reformat_date(date[0].split(" ")[0])
     elif file.name.split("_")[0] == "registration":
         data = pd.read_csv(file, header=None, skiprows=2)
         file.seek(0)
         date = [data.iloc[1,2]]
+        date = reformat_date(date[0].split(" ")[0])
 
-    return date[0].split(" ")[0]
+    return date
+
+def reformat_date(date:str) -> list:
+    date_parts = date.split(" ")
+    real_date = date_parts[0].split("/")
+
+    if len(real_date[0]) != 4:
+        real_date = [real_date[2], real_date[0], real_date[1]]
+    return real_date
 
 # Chekea el formato del archivo
 def format_checker(file) -> bool:
@@ -153,7 +163,6 @@ def get_reunion_data(attendance_file) -> dict:
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
 def get_attendance_data(attendance_file):
-    attendance_data = attendance_data[attendance_data[3] != "No"] #Se quita el creador de la reunion
     attendance_data = attendance_file.iloc[3:, [1, 2, 3]]
     attendance_data = attendance_data[attendance_data[3] != "No"]
     attendance_data = attendance_data[[1, 2]]
@@ -202,7 +211,7 @@ def merged_handler(attendance_file, registration_file) -> bool:
         return False
 
 # Funcion para mostrar el csv mergeado en la interfaz, puede ser reutilizada para mostrar cualquier csv mergeado, solo se necesita el path del archivo, un titulo y un mensaje de exito
-def show_merged_csv(merged_file, title_text:str, succ_message:str)-> bool:
+def show_merged_csv(merged_file:str, title_text:str, succ_message:str)-> bool:
     if merged_file is not None:
         df = pd.read_csv(merged_file)
         st.write(f"### {title_text}")
