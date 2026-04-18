@@ -161,7 +161,8 @@ def get_reunion_data(attendance_file) -> dict:
     date = date[0]
     id_reunion = attendance.iloc[1,1]
 
-    reunion_data = {"Duracion": duration, "Minimun": minimum_presentent_duration, "Date": date, "ID": id_reunion}
+    reunion_data = {"Duracion": duration, "Minimum": minimum_presentent_duration, "Date": date, "ID": id_reunion}
+    print(reunion_data)
     return reunion_data
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
@@ -171,16 +172,16 @@ def get_attendance_data(attendance_file):
     attendance_data = attendance_data[attendance_data[3] != "No"]
     attendance_data = attendance_data[[1, 2]]
     attendance_data.rename(columns={1:"Correo", 2:"Tiempo"}, inplace = True)
-    attendance_data["Correo"] = attendance_data["Correo"].str.lower()
+    attendance_data["Correo"] = attendance_data["Correo"].astype(str).str.strip().str.lower()
     
     return attendance_data
 
 # Obtener los datos de registro, nombre apellido, matricula y correo
 def get_registration_data(registration_file):
     registration = pd.read_csv(registration_file, header=None, skiprows=2)
-    registration_data = registration.iloc[5:,[0,1,2,5]] # Se obtienen los datos de los estudiantes nombre, apellido, matricula y correo
+    registration_data = registration.iloc[4:,[0,1,2,5]] # Se obtienen los datos de los estudiantes nombre, apellido, matricula y correo
     registration_data.rename(columns={0:"Nombre", 1:"Apellido", 2:"Correo", 5:"Matrícula"}, inplace = True)
-    registration_data["Correo"] = registration_data["Correo"].str.lower()
+    registration_data["Correo"] = registration_data["Correo"].astype(str).str.strip().str.lower()
     return registration_data
 
 
@@ -200,16 +201,39 @@ def merge_data(files:list):
             merge_data = var_merge_data
         else:
             merge_data = pd.concat([merge_data, var_merge_data], ignore_index=True)
+    merge_data["Tiempo"] = merge_data["Tiempo"].fillna(0).astype(int) # Rellenar los valores nulos de tiempo con 0 y convertir a entero para poder comparar con el minimo de tiempo para quedar presente
+    merge_data = clean_tuition_number(merge_data)
+    merge_data_final = merge_data.groupby(["Matrícula", "Correo"], as_index=False).agg({
+        "Nombre": "first",
+        "Apellido": "first",
+        "Tiempo": "sum"
+    })
+
+    return merge_data_final
+
+# Se limpia la matricula
+def clean_tuition_number(merge_data):
+    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r'["=]', r"", regex=True)
+    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r" ", r"", regex=False) #Se quitan los espacios 
+    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r".", r"", regex=False) #Se quitan los puntos
+    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r",", r"", regex=False) #Se quitan los puntos
+    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r"-", r"", regex=False) #Se quitan los guiones 
+    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r"_", r"", regex=False) #Se quitan los guiones 
+    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.upper() #Transforma a mayuscula
     return merge_data
 
 # Unir la informacion
-def write_merge_data(files:list) -> bool:
+def write_merge_data(files:list, minimum_duration:int) -> bool:
     merged_data = merge_data(files)
-    reunion_data = get_reunion_data(files[0][0])
-    reunion_id = reunion_data['ID']
-    merged_data.to_csv(f'Archivos/merge_data_{reunion_id}.csv', index=False, encoding='utf-8')
+    merged_data = clean_tuition_number(merged_data) 
+    merged_data["Estado"] = ["Presente" if a >= minimum_duration else "Ausente" for a in merged_data["Tiempo"]]
 
-    if os.path.exists(f"Archivos/merge_data_{reunion_id}.csv"):
+    reunion_data = get_reunion_data(files[0][0])
+    reunion_date = reunion_data['Date'].replace("/", "-").replace(" ", "--") # Reemplazar los caracteres de fecha para que sea compatible con el nombre del archivo
+
+    merged_data.to_csv(f'Archivos/merge_data_{reunion_date}.csv', index=False, encoding='utf-8')
+
+    if os.path.exists(f"Archivos/merge_data_{reunion_date}.csv"):
         return True
     return False
 
@@ -218,8 +242,8 @@ def merged_handler(files:list) -> bool:
     for file_pair in files:
         file_pair[0].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
         file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
-    if write_merge_data(files):
-        show_merged_csv(f'Archivos/merge_data_{get_reunion_data(files[0][0])["ID"]}.csv', "Alumnos", "Archivo mergeado creado exitosamente.")
+    if write_merge_data(files,get_reunion_data(files[0][0])["Minimum"]):
+        show_merged_csv(f'Archivos/merge_data_{get_reunion_data(files[0][0])["Date"].replace("/", "-").replace(" ", "--")}.csv', "Alumnos", "Archivo mergeado creado exitosamente.")
         return True
     else:
         st.write("Error al crear el archivo mergeado.")
