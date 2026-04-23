@@ -1,6 +1,7 @@
 from pandas.io.formats.format import return_docstring
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 import os
 
 def main():
@@ -238,12 +239,13 @@ def merged_handler(files:list) -> bool:
     for file_pair in files:
         file_pair[0].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
         file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
+    date = get_reunion_data(files[0][0])["Date"]
     merged_data = write_merge_data(files, get_reunion_data(files[0][0])["Minimum"])
     if merged_data is not None:
-        # Aqui agregar lo de los graficos
-        show_merged_csv(merged_data, "Todos los alumnos", "Archivo mergeado creado exitosamente.", read_csv_date(files[0][0]))
-        show_present_students(merged_data, get_reunion_data(files[0][0])["Minimum"], read_csv_date(files[0][0]))
-        show_absent_students(merged_data, get_reunion_data(files[0][0])["Minimum"], read_csv_date(files[0][0]))
+        show_reunion_metrics(get_reunion_metrics(merged_data, get_reunion_data(files[0][0])["Minimum"]), date, get_reunion_data(files[0][0])["Duracion"])
+        show_merged_csv(merged_data, "Todos los alumnos", "Archivo mergeado creado exitosamente.", date)
+        show_present_students(merged_data, get_reunion_data(files[0][0])["Minimum"], date)
+        show_absent_students(merged_data, get_reunion_data(files[0][0])["Minimum"], date)
         return True
     else:
         st.write("Error al crear el archivo mergeado.")
@@ -281,5 +283,44 @@ def show_merged_csv(merged_file:pd.DataFrame, title_text:str, succ_message:str, 
         st.download_button("Descargar todos los alumnos", csv_data, "Alumnos {}.csv".format(fecha), "text/csv", key='Clasificados-csv')
         return True
     return False
+
+# Obtener las metricas de la reunion, total de estudiantes, presentes, ausentes y porcentajes
+def get_reunion_metrics(merged_file:pd.DataFrame, minimum_duration:int) -> dict:
+    total_students = merged_file["Tiempo"].size
+    present_students = merged_file[merged_file["Tiempo"] >= minimum_duration].shape[0]
+    absent_students = merged_file[merged_file["Tiempo"] < minimum_duration].shape[0]
+    percentage_present = (present_students * 100) / total_students if total_students > 0 else 0
+    percentage_absent = (absent_students * 100) / total_students if total_students > 0 else 0
+
+    metrics = {
+        "Total": total_students,
+        "Presentes": present_students,
+        "Ausentes": absent_students,
+        "Porcentaje Presentes": percentage_present,
+        "Porcentaje Ausentes": percentage_absent,
+        "Minimo": minimum_duration,
+        "merged_file": merged_file
+    }
+    return metrics
+
+# Mostrar las metricas de la reunion, total de estudiantes, presentes, ausentes y porcentajes
+def show_reunion_metrics(metrics:dict, reunion_date:str, maximo:int) -> None:
+    st.write(f"### Métricas de la reunión del {reunion_date}")
+    col11, col22, col33 = st.columns(3)
+    col33.metric("", "")
+    col11.metric("Tiempo total", "{} min".format(maximo))
+    col22.metric("Tiempo mínimo para estar presente", "{} min".format(metrics["Minimo"]))
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total de estudiantes", metrics["Total"])
+    col2.metric("Presentes", metrics["Presentes"], f"{metrics['Porcentaje Presentes']:.2f}%")
+    col3.metric("Ausentes", metrics["Ausentes"], f"{metrics['Porcentaje Ausentes']:.2f}%")
+    show_graph(metrics)
+
+# Mostrar el grafico de la reunion, porcentaje de presentes y ausentes
+def show_graph(metrics:dict) -> None:
+    fig = px.pie(metrics["merged_file"], values=[metrics["Presentes"], metrics["Ausentes"]], names=["Presentes", "Ausentes"], hole=0.4, title="Gráfico de asistencia")
+    fig.update_traces(textposition="inside", textinfo="percent", textfont=dict(size=25))
+    st.plotly_chart(fig)
 
 main()
