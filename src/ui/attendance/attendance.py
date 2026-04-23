@@ -243,11 +243,33 @@ def merged_handler(files:list) -> bool:
         file_pair[0].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
         file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
     if write_merge_data(files,get_reunion_data(files[0][0])["Minimum"]):
-        show_merged_csv(f'Archivos/merge_data_{get_reunion_data(files[0][0])["Date"].replace("/", "-").replace(" ", "--")}.csv', "Alumnos", "Archivo mergeado creado exitosamente.")
+        show_merged_csv(f'Archivos/merge_data_{get_reunion_data(files[0][0])["Date"].replace("/", "-").replace(" ", "--")}.csv', "Todos los alumnos", "Archivo mergeado creado exitosamente.")
+        show_present_students(f'Archivos/merge_data_{get_reunion_data(files[0][0])["Date"].replace("/", "-").replace(" ", "--")}.csv', get_reunion_data(files[0][0])["Minimum"])
+        show_absent_students(f'Archivos/merge_data_{get_reunion_data(files[0][0])["Date"].replace("/", "-").replace(" ", "--")}.csv', get_reunion_data(files[0][0])["Minimum"])
         return True
     else:
         st.write("Error al crear el archivo mergeado.")
         return False
+
+# Muestra los estudiantes presentes en la reunion.
+def show_present_students(merged_file:str, minimum_duration:int) -> bool:
+    if merged_file is not None:
+        df = pd.read_csv(merged_file)
+        present_students = df[df["Tiempo"] >= minimum_duration]
+        st.write("### Estudiantes presentes")
+        st.dataframe(present_students, use_container_width=True)
+        return True
+    return False
+
+# Muestra los estudiantes ausentes en la reunion.
+def show_absent_students(merged_file:str, minimum_duration:int) -> bool:
+    if merged_file is not None:
+        df = pd.read_csv(merged_file)
+        absent_students = df[df["Tiempo"] < minimum_duration]
+        st.write("### Estudiantes ausentes")
+        st.dataframe(absent_students, use_container_width=True)
+        return True
+    return False
 
 # Funcion para mostrar el csv mergeado en la interfaz, puede ser reutilizada para mostrar cualquier csv mergeado, solo se necesita el path del archivo, un titulo y un mensaje de exito
 def show_merged_csv(merged_file:str, title_text:str, succ_message:str)-> bool:
