@@ -166,7 +166,7 @@ def get_reunion_data(attendance_file) -> dict:
     return reunion_data
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
-def get_attendance_data(attendance_file):
+def get_attendance_data(attendance_file) -> pd.DataFrame:
     attendance = pd.read_csv(attendance_file, header=None)
     attendance_data = attendance.iloc[3:, [1, 2, 3]]
     attendance_data = attendance_data[attendance_data[3] != "No"]
@@ -177,7 +177,7 @@ def get_attendance_data(attendance_file):
     return attendance_data
 
 # Obtener los datos de registro, nombre apellido, matricula y correo
-def get_registration_data(registration_file):
+def get_registration_data(registration_file) -> pd.DataFrame:
     registration = pd.read_csv(registration_file, header=None, skiprows=2)
     registration_data = registration.iloc[4:,[0,1,2,5]] # Se obtienen los datos de los estudiantes nombre, apellido, matricula y correo
     registration_data.rename(columns={0:"Nombre", 1:"Apellido", 2:"Correo", 5:"Matrícula"}, inplace = True)
@@ -186,7 +186,7 @@ def get_registration_data(registration_file):
 
 
 # Unir los datos de asistencia y registro
-def merge_data(files:list):
+def merge_data(files:list) -> pd.DataFrame:
     attendance_data = None
     registration_data = None
     merge_data = None
@@ -212,7 +212,7 @@ def merge_data(files:list):
     return merge_data_final
 
 # Se limpia la matricula
-def clean_tuition_number(merge_data):
+def clean_tuition_number(merge_data) -> pd.DataFrame:
     merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r'["=]', r"", regex=True)
     merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r" ", r"", regex=False) #Se quitan los espacios 
     merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r".", r"", regex=False) #Se quitan los puntos
@@ -240,38 +240,45 @@ def merged_handler(files:list) -> bool:
         file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
     merged_data = write_merge_data(files, get_reunion_data(files[0][0])["Minimum"])
     if merged_data is not None:
-        show_merged_csv(merged_data, "Todos los alumnos", "Archivo mergeado creado exitosamente.")
-        show_present_students(merged_data, get_reunion_data(files[0][0])["Minimum"])
-        show_absent_students(merged_data, get_reunion_data(files[0][0])["Minimum"])
+        # Aqui agregar lo de los graficos
+        show_merged_csv(merged_data, "Todos los alumnos", "Archivo mergeado creado exitosamente.", read_csv_date(files[0][0]))
+        show_present_students(merged_data, get_reunion_data(files[0][0])["Minimum"], read_csv_date(files[0][0]))
+        show_absent_students(merged_data, get_reunion_data(files[0][0])["Minimum"], read_csv_date(files[0][0]))
         return True
     else:
         st.write("Error al crear el archivo mergeado.")
         return False
 
 # Muestra los estudiantes presentes en la reunion.
-def show_present_students(merged_file:pd.DataFrame, minimum_duration:int) -> bool:
+def show_present_students(merged_file:pd.DataFrame, minimum_duration:int, fecha:str) -> bool:
     if merged_file is not None:
         present_students = merged_file[merged_file["Tiempo"] >= minimum_duration]
         st.write("### Estudiantes presentes")
         st.dataframe(present_students, use_container_width=True)
+        csv_data = present_students.to_csv(index=False).encode('utf-8')
+        st.download_button("Descargar presentes", csv_data, "Alumnos presentes {}.csv".format(fecha), "text/csv", key='Presentes-csv')
         return True
     return False
 
 # Muestra los estudiantes ausentes en la reunion.
-def show_absent_students(merged_file:pd.DataFrame, minimum_duration:int) -> bool:
+def show_absent_students(merged_file:pd.DataFrame, minimum_duration:int, fecha:str) -> bool:
     if merged_file is not None:
         absent_students = merged_file[merged_file["Tiempo"] < minimum_duration]
         st.write("### Estudiantes ausentes")
         st.dataframe(absent_students, use_container_width=True)
+        csv_data = absent_students.to_csv(index=False).encode('utf-8')
+        st.download_button("Descargar ausentes", csv_data, "Alumnos ausentes {}.csv".format(fecha), "text/csv", key='Ausentes-csv')
         return True
     return False
 
 # Funcion para mostrar el csv mergeado en la interfaz, puede ser reutilizada para mostrar cualquier csv mergeado, solo se necesita el path del archivo, un titulo y un mensaje de exito
-def show_merged_csv(merged_file:pd.DataFrame, title_text:str, succ_message:str)-> bool:
+def show_merged_csv(merged_file:pd.DataFrame, title_text:str, succ_message:str, fecha:str)-> bool:
     if merged_file is not None:
         st.write(f"### {title_text}")
         st.write(succ_message)
         st.dataframe(merged_file, use_container_width=True)
+        csv_data = merged_file.to_csv(index=False).encode('utf-8')
+        st.download_button("Descargar todos los alumnos", csv_data, "Alumnos {}.csv".format(fecha), "text/csv", key='Clasificados-csv')
         return True
     return False
 
