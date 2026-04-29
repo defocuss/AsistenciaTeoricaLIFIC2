@@ -1,8 +1,6 @@
-from pandas.io.formats.format import return_docstring
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import os
 
 def main():
     st.title("Asistencia")
