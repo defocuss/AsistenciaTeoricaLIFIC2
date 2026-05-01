@@ -179,7 +179,7 @@ def get_attendance_data(attendance_file) -> pd.DataFrame:
 def get_registration_data(registration_file) -> pd.DataFrame:
     registration = pd.read_csv(registration_file, header=None, skiprows=2)
     registration_data = registration.iloc[4:,[0,1,2,5]] # Se obtienen los datos de los estudiantes nombre, apellido, matricula y correo
-    registration_data.rename(columns={0:"Nombre", 1:"Apellido", 2:"Correo", 5:"Matrícula"}, inplace = True)
+    registration_data.rename(columns={0:"Nombre", 1:"Apellido", 2:"Correo", 5:"Matricula"}, inplace = True)
     registration_data["Correo"] = registration_data["Correo"].astype(str).str.strip().str.lower()
     return registration_data
 
@@ -195,14 +195,14 @@ def merge_data(files:list) -> pd.DataFrame:
         attendance_data = get_attendance_data(file_pair[0])
         registration_data = get_registration_data(file_pair[1])
         var_merge_data= pd.merge(attendance_data, registration_data, how = "outer", on="Correo")
-        var_merge_data = var_merge_data.reindex(columns=["Correo", "Matrícula", "Nombre", "Apellido", "Tiempo"])
+        var_merge_data = var_merge_data.reindex(columns=["Correo", "Matricula", "Nombre", "Apellido", "Tiempo"])
         if merge_data is None:
             merge_data = var_merge_data
         else:
             merge_data = pd.concat([merge_data, var_merge_data], ignore_index=True)
     merge_data["Tiempo"] = merge_data["Tiempo"].fillna(0).astype(int) # Rellenar los valores nulos de tiempo con 0 y convertir a entero para poder comparar con el minimo de tiempo para quedar presente
     merge_data = clean_tuition_number(merge_data)
-    merge_data_final = merge_data.groupby(["Matrícula", "Correo"], as_index=False).agg({
+    merge_data_final = merge_data.groupby(["Matricula", "Correo"], as_index=False).agg({
         "Nombre": "first",
         "Apellido": "first",
         "Tiempo": "sum"
@@ -212,13 +212,13 @@ def merge_data(files:list) -> pd.DataFrame:
 
 # Se limpia la matricula
 def clean_tuition_number(merge_data) -> pd.DataFrame:
-    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r'["=]', r"", regex=True)
-    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r" ", r"", regex=False) #Se quitan los espacios 
-    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r".", r"", regex=False) #Se quitan los puntos
-    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r",", r"", regex=False) #Se quitan los puntos
-    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r"-", r"", regex=False) #Se quitan los guiones 
-    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.replace(r"_", r"", regex=False) #Se quitan los guiones 
-    merge_data['Matrícula'] = merge_data['Matrícula'].astype('str').str.upper() #Transforma a mayuscula
+    merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r'["=]', r"", regex=True)
+    merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r" ", r"", regex=False) #Se quitan los espacios 
+    merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r".", r"", regex=False) #Se quitan los puntos
+    merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r",", r"", regex=False) #Se quitan los puntos
+    merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r"-", r"", regex=False) #Se quitan los guiones 
+    merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r"_", r"", regex=False) #Se quitan los guiones 
+    merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.upper() #Transforma a mayuscula
     return merge_data
 
 # Unir la informacion
@@ -249,7 +249,7 @@ def merged_handler(files:list) -> bool:
         st.write("Error al crear el archivo mergeado.")
         return False
 
-# Muestra los estudiantes presentes en la reunion.
+# Muestra los estudiantes presentes en la reunion. //esto podria cambiarlo para que devuelva un dataframe con los estudiantes presentes.
 def show_present_students(merged_file:pd.DataFrame, minimum_duration:int, fecha:str) -> bool:
     if merged_file is not None:
         present_students = merged_file[merged_file["Tiempo"] >= minimum_duration]
@@ -320,5 +320,8 @@ def show_graph(metrics:dict) -> None:
     fig = px.pie(metrics["merged_file"], values=[metrics["Presentes"], metrics["Ausentes"]], names=["Presentes", "Ausentes"], hole=0.4, title="Gráfico de asistencia")
     fig.update_traces(textposition="inside", textinfo="percent", textfont=dict(size=25))
     st.plotly_chart(fig)
+
+# Agregar lo de subir asistencia para probar nomas
+
 
 main()
