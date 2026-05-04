@@ -2,3 +2,4 @@ gspread==6.2.1
 gspread-dataframe==4.0.0
 plotly==6.6.0
 streamlit==1.56.0
+st-supabase-connection==2.1.3
