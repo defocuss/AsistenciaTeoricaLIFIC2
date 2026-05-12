@@ -136,3 +136,22 @@ class SP_Handler:
         except Exception as e:
             st.error(f"Error al obtener la hoja de cálculo: {e}")
             return None
+        
+    def get_module_classes(self, n_modulo:int, signature_code:str) -> list:
+        try:
+            id_asignatura = execute_query(
+                self.client.table("Asignatura")
+                .select("id_asignatura")
+                .eq("codigo", signature_code)
+                .limit(1),
+                ttl=0).data[0]["id_asignatura"]
+            return execute_query(
+                self.client.table("Modulo")
+                .select("clases")
+                .eq("numero_modulo", n_modulo)
+                .eq("id_asignatura", id_asignatura)
+                .limit(1),
+                ttl=0).data[0]["clases"]
+        except Exception as e:
+            st.error(f"Error al obtener la hoja de cálculo: {e}")
+            return None
