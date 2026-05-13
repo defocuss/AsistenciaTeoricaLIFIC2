@@ -9,6 +9,19 @@ class SP_Handler:
             type=SupabaseConnection,
             ttl=None)
 
+    def verify_user(self, email:str) -> bool:
+        try:
+            result = execute_query(
+                self.client.table("Usuario")
+                .select("email")
+                .eq("email", email)
+                .limit(1),
+                ttl=0).data
+            return len(result) > 0
+        except Exception as e:
+            st.error(f"Error al obtener el usuario: {e}")
+            return False
+
     def get_signature_id(self, signature:str) -> int:
         try:
             return execute_query(
