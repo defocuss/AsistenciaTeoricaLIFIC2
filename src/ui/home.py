@@ -10,6 +10,44 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.db.sp_connection import SP_Handler
 
+## Diagnóstico de red para la UFRO (bloqueo de IPs de datacenters)
+import requests
+
+st.subheader("🕵️‍♂️ Test de Conexión y Diagnóstico de Red")
+
+# 1. Averiguar qué IP pública tiene tu app en Streamlit
+try:
+    ip_response = requests.get('https://api.ipify.org', timeout=5)
+    st.info(f"🌐 La IP pública de este servidor (Streamlit) es: **{ip_response.text}**")
+except Exception as e:
+    st.error("No se pudo obtener la IP del servidor.")
+
+# 2. Intentar conectarse a la intranet de la UFRO
+url_ufro = "https://intranet.ufro.cl/"
+st.write(f"Intentando conectar a: `{url_ufro}` ...")
+
+try:
+    # Usamos requests para hacer una visita básica (como un navegador simple)
+    # Ponemos 10 segundos de límite.
+    response = requests.get(url_ufro, timeout=10)
+    
+    st.write(f"**Código de respuesta HTTP:** `{response.status_code}`")
+    
+    if response.status_code == 200:
+        st.success("✅ **Status 200 (OK):** ¡La conexión llegó perfecto! Esto significa que la IP NO está bloqueada por red. El problema podría ser que la página detecta a Playwright como un bot.")
+    elif response.status_code == 403:
+        st.error("🚫 **Status 403 (Forbidden):** El servidor de la UFRO rechazó la conexión. Tienen un Firewall (probablemente Cloudflare o similar) que bloquea IPs de datacenters o de otros países.")
+    else:
+        st.warning(f"⚠️ **Respuesta inesperada.** El servidor contestó, pero con este código: {response.status_code}")
+
+except requests.exceptions.Timeout:
+    st.error("⏳ **Timeout:** La conexión tardó demasiado y fue abortada. Este es el síntoma clásico de un **bloqueo estricto por Firewall**. La universidad simplemente ignora las peticiones que vienen de servidores en la nube.")
+except requests.exceptions.ConnectionError:
+    st.error("🔌 **Error de Conexión:** La conexión fue rechazada de plano (Connection Refused).")
+except Exception as e:
+    st.error(f"❌ **Otro error:** {e}")
+## Fin del diagnóstico de red
+
 sp_connection = SP_Handler()
 
 @st.cache_resource
