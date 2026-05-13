@@ -13,39 +13,34 @@ from src.db.sp_connection import SP_Handler
 ## Diagnóstico de red para la UFRO (bloqueo de IPs de datacenters)
 import requests
 
-st.subheader("🕵️‍♂️ Test de Conexión y Diagnóstico de Red")
+st.subheader("🕵️‍♂️ Test de Conexión Definitivo (Con Disfraz)")
 
-# 1. Averiguar qué IP pública tiene tu app en Streamlit
-try:
-    ip_response = requests.get('https://api.ipify.org', timeout=5)
-    st.info(f"🌐 La IP pública de este servidor (Streamlit) es: **{ip_response.text}**")
-except Exception as e:
-    st.error("No se pudo obtener la IP del servidor.")
-
-# 2. Intentar conectarse a la intranet de la UFRO
 url_ufro = "https://intranet.ufro.cl/"
-st.write(f"Intentando conectar a: `{url_ufro}` ...")
+
+# Aquí "disfrazamos" nuestra petición para que parezca un humano usando Chrome
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-CL,es;q=0.8,en-US;q=0.5,en;q=0.3",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1"
+}
+
+st.write("Enviando petición con cabeceras de navegador real...")
 
 try:
-    # Usamos requests para hacer una visita básica (como un navegador simple)
-    # Ponemos 10 segundos de límite.
-    response = requests.get(url_ufro, timeout=10)
-    
-    st.write(f"**Código de respuesta HTTP:** `{response.status_code}`")
+    response = requests.get(url_ufro, headers=headers, timeout=15)
+    st.write(f"**Código de respuesta:** `{response.status_code}`")
     
     if response.status_code == 200:
-        st.success("✅ **Status 200 (OK):** ¡La conexión llegó perfecto! Esto significa que la IP NO está bloqueada por red. El problema podría ser que la página detecta a Playwright como un bot.")
-    elif response.status_code == 403:
-        st.error("🚫 **Status 403 (Forbidden):** El servidor de la UFRO rechazó la conexión. Tienen un Firewall (probablemente Cloudflare o similar) que bloquea IPs de datacenters o de otros países.")
+        st.success("✅ ¡Funcionó! El problema era que el servidor rechazaba bots básicos. Ahora sabemos que sí se puede entrar disfrazando la petición.")
     else:
-        st.warning(f"⚠️ **Respuesta inesperada.** El servidor contestó, pero con este código: {response.status_code}")
+        st.warning(f"⚠️ Respondió con código: {response.status_code}")
 
 except requests.exceptions.Timeout:
-    st.error("⏳ **Timeout:** La conexión tardó demasiado y fue abortada. Este es el síntoma clásico de un **bloqueo estricto por Firewall**. La universidad simplemente ignora las peticiones que vienen de servidores en la nube.")
-except requests.exceptions.ConnectionError:
-    st.error("🔌 **Error de Conexión:** La conexión fue rechazada de plano (Connection Refused).")
+    st.error("⏳ **Timeout de nuevo.** Diagnóstico definitivo: La UFRO tiene bloqueadas las IPs de la nube donde se aloja Streamlit a nivel de Firewall. No hay forma de entrar directamente desde este servidor.")
 except Exception as e:
-    st.error(f"❌ **Otro error:** {e}")
+    st.error(f"❌ Otro error: {e}")
 ## Fin del diagnóstico de red
 
 sp_connection = SP_Handler()
