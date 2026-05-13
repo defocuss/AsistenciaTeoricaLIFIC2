@@ -14,3 +14,4 @@ libxfixes3
 libxrandr2
 libxrender1
 libxshmfence1
+libxkbcommon0
