@@ -25,7 +25,20 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
             "--disable-extensions",     
             "--disable-setuid-sandbox",
             "--single-process",           
-            "--no-zygote"                 
+            "--no-zygote",
+            # Argumentos para tests
+            "--disable-background-networking",
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-breakpad",
+                "--disable-component-extensions-with-background-pages",
+                "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+                "--disable-ipc-flooding-protection",
+                "--disable-renderer-backgrounding",
+                "--enable-features=NetworkService,NetworkServiceInProcess",
+                "--force-color-profile=srgb",
+                "--metrics-recording-only",
+                "--mute-audio"             
         ]
         )
         page = browser.new_page() # Crea una nueva página en el navegador
