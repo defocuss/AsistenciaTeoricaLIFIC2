@@ -7,8 +7,17 @@ import streamlit as st
 
 def intranet_workflow(link: str, rut: str, password: str, subject_code: str, subject_module: int, date: str, class_description: str, presentes: pd.DataFrame, logger: Callable[[str,str], None]) -> None:
     with sync_playwright() as p:
+        #test proxy
+        proxy_url = st.secrets["PROXY_URL"]
+
+        proxy_settings = {
+            "server": proxy_url
+        }
+        # test proxy
+
         browser = p.chromium.launch(
             headless=True,
+            proxy=proxy_settings,
             args=["--no-sandbox", "--disable-dev-shm-usage"]
         )
         page = browser.new_page() # Crea una nueva página en el navegador
