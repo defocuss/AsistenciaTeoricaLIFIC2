@@ -24,8 +24,6 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
             "--disable-gpu",         
             "--disable-extensions",     
             "--disable-setuid-sandbox",
-            "--single-process",           
-            "--no-zygote",
             # Argumentos para tests
             "--disable-background-networking",
             "--disable-background-timer-throttling",
@@ -39,6 +37,7 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
             "--force-color-profile=srgb",
             "--metrics-recording-only",
             "--mute-audio",
+            "--disable-images", 
             "--ignore-certificate-errors",
             "--proxy-bypass-list=<-loopback>",    
         ]
