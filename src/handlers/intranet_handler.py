@@ -40,6 +40,9 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
         )
         
         page = context.new_page() 
+        page.on("crash", lambda: print("🚨 CRASH INTERNO: El contenedor de la página explotó."))
+        page.on("pageerror", lambda err: print(f"🚨 ERROR JS EN PÁGINA: {err}"))
+        page.on("requestfailed", lambda req: print(f"🚨 PETICIÓN FALLIDA: {req.url} - {req.failure}"))
         # ---------------------------------
 
         # --- NUEVO: Optimización extrema de RAM ---
