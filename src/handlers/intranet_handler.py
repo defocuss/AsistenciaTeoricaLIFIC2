@@ -18,7 +18,15 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
         browser = p.chromium.launch(
             headless=True,
             proxy=proxy_settings,
-            args=["--no-sandbox", "--disable-dev-shm-usage"]
+            args=[
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",         
+            "--disable-extensions",     
+            "--disable-setuid-sandbox",
+            "--single-process",           
+            "--no-zygote"                 
+        ]
         )
         page = browser.new_page() # Crea una nueva página en el navegador
         if not login_intranet(page, link, rut, password, logger):
