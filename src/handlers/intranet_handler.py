@@ -38,11 +38,13 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
             "--enable-features=NetworkService,NetworkServiceInProcess",
             "--force-color-profile=srgb",
             "--metrics-recording-only",
-            "--mute-audio"             
+            "--mute-audio",
+            "--ignore-certificate-errors",
+            "--proxy-bypass-list=<-loopback>",    
         ]
         )
         page = browser.new_page() # Crea una nueva página en el navegador
-        
+
         # --- NUEVO: Optimización extrema de RAM ---
         page.route(
             "**/*",
@@ -93,6 +95,7 @@ def login_intranet(page: Page, link: str, rut: str, password: str, logger: Calla
         
     except Exception as e:
         logger("error", f"El navegador colapsó. Error exacto: {str(e)}")
+        print("El navegador colapsó. Error exacto:", str(e))
         # Esto te dirá si alcanzó a ver algo de la página antes de morir
         logger("error", f"URL actual al morir: {page.url}") 
         return False
