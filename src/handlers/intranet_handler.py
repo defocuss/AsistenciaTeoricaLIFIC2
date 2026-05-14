@@ -19,30 +19,28 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
             headless=True,
             proxy=proxy_settings,
             args=[
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu",         
-            "--disable-extensions",     
-            "--disable-setuid-sandbox",
-            # Argumentos para tests
-            "--disable-background-networking",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-breakpad",
-            "--disable-component-extensions-with-background-pages",
-            "--disable-features=TranslateUI,BlinkGenPropertyTrees",
-            "--disable-ipc-flooding-protection",
-            "--disable-renderer-backgrounding",
-            "--enable-features=NetworkService,NetworkServiceInProcess",
-            "--force-color-profile=srgb",
-            "--metrics-recording-only",
-            "--mute-audio",
-            "--disable-images", 
-            "--ignore-certificate-errors",
-            "--proxy-bypass-list=<-loopback>",    
-        ]
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",         
+                "--disable-extensions",     
+                "--disable-setuid-sandbox",
+                "--ignore-certificate-errors",
+                "--proxy-bypass-list=<-loopback>",
+                "--disable-background-networking",
+                "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+            ]
         )
-        page = browser.new_page() # Crea una nueva página en el navegador
+        # --- NUEVO: Camuflaje Anti-Bot ---
+        # En lugar de crear la página directamente del browser, creamos un contexto
+        # con un User-Agent y un tamaño de pantalla real.
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080},
+            ignore_https_errors=True # Refuerzo por si la intranet tiene certificados SSL extraños
+        )
+        
+        page = context.new_page() 
+        # ---------------------------------
 
         # --- NUEVO: Optimización extrema de RAM ---
         page.route(
