@@ -28,20 +28,29 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
             "--no-zygote",
             # Argumentos para tests
             "--disable-background-networking",
-                "--disable-background-timer-throttling",
-                "--disable-backgrounding-occluded-windows",
-                "--disable-breakpad",
-                "--disable-component-extensions-with-background-pages",
-                "--disable-features=TranslateUI,BlinkGenPropertyTrees",
-                "--disable-ipc-flooding-protection",
-                "--disable-renderer-backgrounding",
-                "--enable-features=NetworkService,NetworkServiceInProcess",
-                "--force-color-profile=srgb",
-                "--metrics-recording-only",
-                "--mute-audio"             
+            "--disable-background-timer-throttling",
+            "--disable-backgrounding-occluded-windows",
+            "--disable-breakpad",
+            "--disable-component-extensions-with-background-pages",
+            "--disable-features=TranslateUI,BlinkGenPropertyTrees",
+            "--disable-ipc-flooding-protection",
+            "--disable-renderer-backgrounding",
+            "--enable-features=NetworkService,NetworkServiceInProcess",
+            "--force-color-profile=srgb",
+            "--metrics-recording-only",
+            "--mute-audio"             
         ]
         )
         page = browser.new_page() # Crea una nueva página en el navegador
+        
+        # --- NUEVO: Optimización extrema de RAM ---
+        page.route(
+            "**/*",
+            lambda route: route.abort()
+            if route.request.resource_type in ["image", "stylesheet", "font", "media"]
+            else route.continue_()
+        )
+        # ------------------------------------------
         if not login_intranet(page, link, rut, password, logger):
             return
         if not go_to_subject(page, subject_code, subject_module, logger):
