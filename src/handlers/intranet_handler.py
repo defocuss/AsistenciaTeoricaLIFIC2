@@ -46,6 +46,8 @@ def intranet_workflow(link: str, rut: str, password: str, subject_code: str, sub
 
 # Iniciar sesión en la intranet. Recibe como parametro elrut y la contraseña del profesor.
 def login_intranet(page: Page, link: str, rut: str, password: str, logger: Callable[[str, str], None]) -> bool:
+    '''
+    Comentado para tests
     logger("warning","Iniciando sesión en la intranet...")
     page.goto(link)
     page.fill('input#POPUSERNAME', rut)  # credenciales de profe vale
@@ -55,6 +57,24 @@ def login_intranet(page: Page, link: str, rut: str, password: str, logger: Calla
         time.sleep(5)
         return False
     page.wait_for_load_state('networkidle')
+    return True
+    '''
+
+    logger("warning","Iniciando sesión en la intranet...")
+    try:
+        # Aumentamos el timeout e imprimimos exactamente en qué estado quedó
+        page.goto(link, timeout=45000, wait_until="domcontentloaded")
+        
+        page.fill('input#POPUSERNAME', rut)
+        page.fill('input#XYZ', password)
+        page.click('text=INGRESO INTRANET')
+        
+    except Exception as e:
+        logger("error", f"El navegador colapsó. Error exacto: {str(e)}")
+        # Esto te dirá si alcanzó a ver algo de la página antes de morir
+        logger("error", f"URL actual al morir: {page.url}") 
+        return False
+        
     return True
 
 # Funcion para validar que el inicio de sesion fue exitoso.
