@@ -6,8 +6,9 @@ from datetime import datetime
 import time
 
 
-def intranet_workflow(link_intranet: str, login_url: str, rut: str, password: str, subject_code: str, subject_module: int, date: str, class_description: str, presentes: pd.DataFrame, logger: Callable[[str,str], None]) -> None:
-    session = login_intranet_requests(login_url, link_intranet, rut, password, logger)
+def intranet_workflow(link_proxy: str, link_intranet: str, login_url: str, rut: str, password: str, subject_code: str, subject_module: int, date: str, class_description: str, presentes: pd.DataFrame, logger: Callable[[str,str], None]) -> None:
+
+    session = login_intranet_requests(link_proxy,login_url, link_intranet, rut, password, logger)
     if session:
         if not go_to_subject_requests(session, subject_code, subject_module, link_intranet, date, logger):
             time.sleep(5) # Pequeña pausa para que el usuario pueda leer el mensaje antes de mostrar el siguiente error.
@@ -31,8 +32,15 @@ def intranet_workflow(link_intranet: str, login_url: str, rut: str, password: st
         logger("error", "No se pudo iniciar sesión. Verifica tus credenciales.")
         return
 
-def login_intranet_requests(login_url: str, intranet_url: str, rut: str, password: str, logger: Callable[[str, str], None]) -> requests.Session | None:
+def login_intranet_requests(link_proxy: str, login_url: str, intranet_url: str, rut: str, password: str, logger: Callable[[str, str], None]) -> requests.Session | None:
     session = requests.Session()
+
+    if link_proxy:
+        logger("info", f"Conectando a través del proxy local: {link_proxy}")
+        session.proxies.update({
+            "http": link_proxy,
+            "https": link_proxy
+        })
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
@@ -63,8 +71,8 @@ def login_intranet_requests(login_url: str, intranet_url: str, rut: str, passwor
             logger("error", "Credenciales incorrectas o servidor rechazó el login.")
             return None
             
-    except Exception as e:
-        logger("error", f"Error de red: {str(e)}")
+    except requests.exceptions.RequestException as e:
+        logger("error", f"Error de red/proxy: {str(e)}")
         return None
     
 def go_to_subject_requests(session: requests.Session, subject_code: str, subject_module: int, intranet_url: str, date: str, logger: Callable[[str, str], None]) -> bool:
