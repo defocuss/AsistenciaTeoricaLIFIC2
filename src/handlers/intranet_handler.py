@@ -3,28 +3,20 @@ from typing import Callable
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-import time
 
 
 def intranet_workflow(link_proxy: str, link_intranet: str, login_url: str, rut: str, password: str, subject_code: str, subject_module: int, date: str, class_description: str, presentes: pd.DataFrame, logger: Callable[[str,str], None]) -> None:
-
     session = login_intranet_requests(link_proxy,login_url, link_intranet, rut, password, logger)
     if session:
         if not go_to_subject_requests(session, subject_code, subject_module, link_intranet, date, logger):
-            time.sleep(5) # Pequeña pausa para que el usuario pueda leer el mensaje antes de mostrar el siguiente error.
-            logger("error", "No se pudo acceder a la asignatura. Verifica el código y módulo.")
             return
         if not create_class_requests(session, date, class_description, link_intranet, logger):
-            time.sleep(5)
-            logger("error", "No se pudo registrar la clase. Verifica la fecha y descripción.")
             return
         class_id = get_class_id_requests(session, date, link_intranet, class_description, logger)
         if not class_id:
             logger("error", "No se pudo obtener el ID de la clase recién creada.")
             return
         if not submit_attendance_requests(session, class_id, presentes, link_intranet, logger):
-            time.sleep(5)
-            logger("error", "No se pudo registrar la asistencia. Verifica los datos y vuelve a intentar.")
             return 
         logger("success", "Asistencia registrada exitosamente a través de la API de requests.")
         return
@@ -36,7 +28,7 @@ def login_intranet_requests(link_proxy: str, login_url: str, intranet_url: str, 
     session = requests.Session()
 
     if link_proxy:
-        logger("info", f"Conectando a través del proxy local: {link_proxy}")
+        logger("info", f"Conectando a través del proxy local")
         session.proxies.update({
             "http": link_proxy,
             "https": link_proxy
@@ -50,21 +42,19 @@ def login_intranet_requests(link_proxy: str, login_url: str, intranet_url: str, 
         "Upgrade-Insecure-Requests": "1"
     }
     
-    # Aquí está el truco: usar las llaves exactas que espera el backend de PHP
     payload = {
         "Formulario[POPUSERNAME]": rut,
         "Formulario[XYZ]": password
     }
     
-    logger("warning", f"Enviando POST a {login_url} con payload: {payload}")
+    logger("warning", f"Enviando POST a {login_url}")
     
     try:
-        # Hacemos el POST. requests guardará la cookie PHPSESSID automáticamente en 'session'
+        # POST de inicio sesion
         response = session.post(login_url, data=payload, headers=headers, timeout=15)
         
-        # Verificamos si la redirección funcionó o si entramos a la portada
+        # Verificar si se entro a la portada.
         if "portada.php" in response.url or "Bienvenido" in response.text or response.status_code == 200:
-            logger("success", f"Redirigido a: {response.url}")
             logger("success", "Inicio de sesión exitoso.")
             return session
         else:
@@ -77,10 +67,8 @@ def login_intranet_requests(link_proxy: str, login_url: str, intranet_url: str, 
     
 def go_to_subject_requests(session: requests.Session, subject_code: str, subject_module: int, intranet_url: str, date: str, logger: Callable[[str, str], None]) -> bool:
     
-    # URL 1: Entrar al ramo
     detalle_url = f"{intranet_url}/academico/asistencia/ver_regasist_det.php"
     
-    # URL 2: Cargar la configuración (AJAX)
     conf_url = f"{intranet_url}/academico/asistencia/regasist_conf.php"
     
     headers_base = {
@@ -89,8 +77,7 @@ def go_to_subject_requests(session: requests.Session, subject_code: str, subject
         "Referer": f"{intranet_url}/academico/asistencia/ver_regasist.php"
     }
     periodos = get_academic_period(date)
-    print(f"Parámetros del periodo académico calculados: {periodos}")
-    # Armamos el payload dinámico con los parámetros que recibe la función
+
     payload_detalle = {
         "Formulario[periodo]": periodos["Formulario[periodo]"],  
         "Formulario[ano_asist]": periodos["Formulario[ano_asist]"],
@@ -106,20 +93,13 @@ def go_to_subject_requests(session: requests.Session, subject_code: str, subject
         "Formulario[editar]": "0"
     }
 
-    logger("warning", f"Payload para detalle: {payload_detalle}")
     logger("warning", f"Ingresando a la asignatura {subject_code} con módulo {subject_module}...")
-
     try:
-        # 1. Hacemos el POST para entrar a la asignatura
         res_detalle = session.post(detalle_url, data=payload_detalle, headers=headers_base, timeout=15)
-        
         if res_detalle.status_code == 200 and subject_code in res_detalle.text:
-            
-            # 2. Hacemos el POST secundario (AJAX) para cargar la configuración de la vista
             headers_ajax = headers_base.copy()
             headers_ajax["X-Requested-With"] = "XMLHttpRequest"
-            headers_ajax["Referer"] = detalle_url # El referer cambia ahora que estamos dentro
-            
+            headers_ajax["Referer"] = detalle_url
             session.post(conf_url, data=payload_conf, headers=headers_ajax, timeout=15)
             
             logger("success", "Asignatura seleccionada y configurada exitosamente en el servidor.")
@@ -133,8 +113,6 @@ def go_to_subject_requests(session: requests.Session, subject_code: str, subject
         return False
 
 def create_class_requests(session: requests.Session, date: str, class_description: str, intranet_url: str, logger: Callable[[str, str], None]) -> bool:
-    
-    # URL que hace la inserción en la base de datos
     crear_clase_url = f"{intranet_url}/academico/asistencia/regasist_clases_ing.php"
     
     headers_ajax = {
@@ -145,13 +123,11 @@ def create_class_requests(session: requests.Session, date: str, class_descriptio
         "Referer": f"{intranet_url}/academico/asistencia/ver_regasist_det.php"
     }
 
-    # El payload exacto que capturaste. 
-    # requests se encargará de transformar los espacios y los '/' automáticamente (URL encoding).
     payload = {
         "MAX_FILE_SIZE": "10000000",
         "Formulario[cod_tipcla]": "T",
-        "Formulario[f_clase]": date,                 # Ejemplo: "27/04/2026"
-        "Formulario[observac]": class_description,   # Ejemplo: "Clase 13 test"
+        "Formulario[f_clase]": date,
+        "Formulario[observac]": class_description,
         "Formulario[cod_tarch]": "",
         "Formulario[id_clase]": "",
         "Formulario[parametro]": "",
@@ -160,12 +136,8 @@ def create_class_requests(session: requests.Session, date: str, class_descriptio
     }
 
     logger("warning", f"Registrando la clase del {date} a nivel de red...")
-    
     try:
         response = session.post(crear_clase_url, data=payload, headers=headers_ajax, timeout=15)
-        
-        # Generalmente, estos scripts de PHP devuelven un código HTTP 200 si todo sale bien, 
-        # a veces acompañados de un mensaje de éxito en texto o JSON.
         if response.status_code == 200:
             logger("success", "Clase registrada correctamente en el servidor.")
             return True
@@ -178,10 +150,8 @@ def create_class_requests(session: requests.Session, date: str, class_descriptio
         return False
 
 def submit_attendance_requests(session: requests.Session, class_id: str, presentes: pd.DataFrame, intranet_url: str, logger: Callable[[str, str], None]) -> bool:
-    
-    # URL 1: Obtener el HTML con la lista de alumnos
     list_url = f"{intranet_url}/academico/asistencia/regasist_asist_lst.php"
-    # URL 2: Registrar la asistencia final
+
     submit_url = f"{intranet_url}/academico/asistencia/regasist_asist_ing.php"
 
     headers = {
@@ -192,7 +162,6 @@ def submit_attendance_requests(session: requests.Session, class_id: str, present
         "Referer": f"{intranet_url}/academico/asistencia/ver_regasist_det.php"
     }
 
-    # 1. Pedir la tabla HTML para esta clase
     payload_list = {
         "MAX_FILE_SIZE": "10000000",
         "Formulario[cb_id_clase]": class_id,
@@ -210,22 +179,18 @@ def submit_attendance_requests(session: requests.Session, class_id: str, present
             logger("error", f"Error al obtener la lista de alumnos. HTTP: {response_list.status_code}")
             return False
 
-        # --- EXTRACCIÓN DINÁMICA CON BEAUTIFULSOUP ---
         soup = BeautifulSoup(response_list.text, 'html.parser')
         maestra_matriculas = {}
         
-        # Buscamos todas las etiquetas <input> en el código fuente
         for input_tag in soup.find_all('input'):
             name = input_tag.get('name', '')
             value_raw = str(input_tag.get('value', '')).strip().upper()
             
-            # Filtramos exactamente el input que encontraste: 
-            # Empieza con "Formulario[" y su valor contiene "*1"
             if name.startswith('Formulario[') and '*1' in value_raw:
-                # 1. Extraemos el índice (ej: "Formulario[1]" -> "1")
+                # Indice del formulario
                 index = name.split('[')[-1].replace(']', '')
                 
-                # 2. Extraemos la matrícula (ej: "22437606526*1" -> "22437606526")
+                # Obtener matricula antes del '*'
                 matricula = value_raw.split('*')[0]
                 
                 # Guardamos en el diccionario maestro si el índice es válido
@@ -239,7 +204,6 @@ def submit_attendance_requests(session: requests.Session, class_id: str, present
             logger("warning", "🚨 ALERTA: No se detectaron alumnos. El HTML podría estar vacío o haber caducado la sesión.")
             return False
 
-        # --- CONSTRUCCIÓN DEL PAYLOAD FINAL ---
         final_payload = {
             "MAX_FILE_SIZE": "10000000",
             "Formulario[cb_id_clase]": class_id,
@@ -252,25 +216,18 @@ def submit_attendance_requests(session: requests.Session, class_id: str, present
             "Formulario[editar]": "0"
         }
 
-        # Aunque leímos el radio button, el servidor IGUAL espera el array de matrículas
-        # Así que lo reconstruimos en el payload dinámicamente
         for matricula, index in maestra_matriculas.items():
             final_payload[f"Formulario[matricula][{index}]"] = matricula
 
-        # Limpiamos el CSV: forzamos a texto, quitamos espacios ocultos y pasamos a mayúscula
         rut_presentes = set(presentes['Matricula'].astype(str).values)
         
         alumnos_marcados = 0
-        
-        # Marcamos las asistencias definitivas
         for matricula, index in maestra_matriculas.items():
             if matricula in rut_presentes:
                 final_payload[f"Formulario[{index}]"] = f"{matricula}*1"
                 alumnos_marcados += 1
 
         logger("info", f"Marcando {alumnos_marcados} presentes (de {len(rut_presentes)} en CSV).")
-        
-        # 2. Enviar el paquete final
         logger("info", "Enviando registro a la base de datos de la universidad...")
         response_submit = session.post(submit_url, data=final_payload, headers=headers, timeout=20)
         
@@ -285,30 +242,23 @@ def submit_attendance_requests(session: requests.Session, class_id: str, present
         logger("error", f"Error crítico de red: {str(e)}")
         return False
 
+# Recibe una fecha dia/mes/año y devuelve un diccionario con los campos necesarios para saber el semetre
 def get_academic_period(date_str: str) -> dict:
-    """
-    Recibe una fecha en formato 'DD/MM/YYYY' y devuelve el diccionario 
-    con los parámetros del semestre para la intranet.
-    """
-    # Convertimos el string a un objeto de fecha
     date_obj = datetime.strptime(date_str, "%d/%m/%Y")
     
     year = str(date_obj.year)
-    # Asumimos: Enero a Julio (1 a 7) es Semestre 1. Agosto a Diciembre (8 a 12) es Semestre 2.
+    # De enero a julio semestre 1, de agosto a diciembre semestre 2
     semester = "1" if date_obj.month <= 7 else "2"
     
     return {
-        "Formulario[periodo]": f"{year}{semester}", # Ej: "20261"
-        "Formulario[ano_asist]": year,              # Ej: "2026"
-        "Formulario[sem_asist]": semester           # Ej: "1"
+        "Formulario[periodo]": f"{year}{semester}",
+        "Formulario[ano_asist]": year,              
+        "Formulario[sem_asist]": semester     
     }
 
+# Busca el id de la clase recien creada para subir la asistencia.
 def get_class_id_requests(session: requests.Session, date: str, link:str,class_description: str, logger: Callable[[str, str], None]) -> str | None:
-    """
-    Obtiene la tabla de clases desde el servidor y busca el ID de la clase 
-    que coincida exactamente con la fecha y la descripción dada.
-    """
-    # Esta es la URL que carga la tabla visual que me mostraste
+
     url_tabla_clases = f"{link}/academico/asistencia/regasist_clases.php"
     
     headers = {
@@ -319,7 +269,6 @@ def get_class_id_requests(session: requests.Session, date: str, link:str,class_d
         "Referer": f"{link}academico/asistencia/ver_regasist_det.php"
     }
 
-    # Payload base para pedir que nos devuelva la tabla
     payload = {
         "MAX_FILE_SIZE": "10000000",
         "Formulario[cod_tipcla]": "",
@@ -339,19 +288,12 @@ def get_class_id_requests(session: requests.Session, date: str, link:str,class_d
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # Buscamos todas las filas <tr> de la tabla
             for tr in soup.find_all('tr'):
                 tds = tr.find_all('td')
-                
-                # Nos aseguramos de que la fila tenga al menos 4 columnas de datos
                 if len(tds) >= 4:
                     f_clase = tds[2].text.strip()
                     desc = tds[3].text.strip()
-                    
-                    # Si la fecha y la descripción coinciden con las que acabamos de crear
                     if f_clase == date and desc == class_description:
-                        # Extraemos el ID de la primera columna
                         class_id = tds[0].text.strip()
                         logger("info", f"¡Match encontrado! El ID de la clase es: {class_id}")
                         return class_id
