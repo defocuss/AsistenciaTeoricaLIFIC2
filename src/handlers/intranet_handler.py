@@ -1,273 +1,359 @@
-from playwright.sync_api import sync_playwright, Page, TimeoutError
 import pandas as pd
-import time
 from typing import Callable
-import streamlit as st
+import requests
+from bs4 import BeautifulSoup
+from datetime import datetime
+import time
 
 
-def intranet_workflow(link: str, rut: str, password: str, subject_code: str, subject_module: int, date: str, class_description: str, presentes: pd.DataFrame, logger: Callable[[str,str], None]) -> None:
-    with sync_playwright() as p:
-        #test proxy
-        proxy_url = st.secrets["PROXY_URL"]
-
-        proxy_settings = {
-            "server": proxy_url
-        }
-        # test proxy
-
-        browser = p.chromium.launch(
-            headless=True,
-            proxy=proxy_settings,
-            args=[
-                "--no-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu",         
-                "--disable-extensions",     
-                "--disable-setuid-sandbox",
-                "--ignore-certificate-errors",
-                "--proxy-bypass-list=<-loopback>",
-                "--disable-background-networking",
-                "--disable-features=TranslateUI,BlinkGenPropertyTrees",
-            ]
-        )
-        # --- NUEVO: Camuflaje Anti-Bot ---
-        # En lugar de crear la página directamente del browser, creamos un contexto
-        # con un User-Agent y un tamaño de pantalla real.
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1920, "height": 1080},
-            ignore_https_errors=True # Refuerzo por si la intranet tiene certificados SSL extraños
-        )
-        
-        page = context.new_page() 
-        page.on("crash", lambda: print("🚨 CRASH INTERNO: El contenedor de la página explotó."))
-        page.on("pageerror", lambda err: print(f"🚨 ERROR JS EN PÁGINA: {err}"))
-        page.on("requestfailed", lambda req: print(f"🚨 PETICIÓN FALLIDA: {req.url} - {req.failure}"))
-        # ---------------------------------
-
-        # --- NUEVO: Optimización extrema de RAM ---
-        page.route(
-            "**/*",
-            lambda route: route.abort()
-            if route.request.resource_type in ["image", "stylesheet", "font", "media"]
-            else route.continue_()
-        )
-        # ------------------------------------------
-        if not login_intranet(page, link, rut, password, logger):
+def intranet_workflow(link_intranet: str, login_url: str, rut: str, password: str, subject_code: str, subject_module: int, date: str, class_description: str, presentes: pd.DataFrame, logger: Callable[[str,str], None]) -> None:
+    session = login_intranet_requests(login_url, link_intranet, rut, password, logger)
+    if session:
+        if not go_to_subject_requests(session, subject_code, subject_module, link_intranet, date, logger):
+            time.sleep(5) # Pequeña pausa para que el usuario pueda leer el mensaje antes de mostrar el siguiente error.
+            logger("error", "No se pudo acceder a la asignatura. Verifica el código y módulo.")
             return
-        if not go_to_subject(page, subject_code, subject_module, logger):
+        if not create_class_requests(session, date, class_description, link_intranet, logger):
+            time.sleep(5)
+            logger("error", "No se pudo registrar la clase. Verifica la fecha y descripción.")
             return
-        if not select_class_tab(page, logger):
+        class_id = get_class_id_requests(session, date, link_intranet, class_description, logger)
+        if not class_id:
+            logger("error", "No se pudo obtener el ID de la clase recién creada.")
             return
-        if not select_class_info(page, date, class_description, logger):
-            return
-        if not select_atten_tab(page, logger):
-            return
-        if not select_students(page, date, class_description, presentes, logger):
-            return
-        time.sleep(5) # Esperar a que se registre la asistencia antes de cerrar el navegador
-        browser.close()
+        if not submit_attendance_requests(session, class_id, presentes, link_intranet, logger):
+            time.sleep(5)
+            logger("error", "No se pudo registrar la asistencia. Verifica los datos y vuelve a intentar.")
+            return 
+        logger("success", "Asistencia registrada exitosamente a través de la API de requests.")
+        return
+    else:
+        logger("error", "No se pudo iniciar sesión. Verifica tus credenciales.")
+        return
 
-# Iniciar sesión en la intranet. Recibe como parametro elrut y la contraseña del profesor.
-def login_intranet(page: Page, link: str, rut: str, password: str, logger: Callable[[str, str], None]) -> bool:
-    '''
-    Comentado para tests
-    logger("warning","Iniciando sesión en la intranet...")
-    page.goto(link)
-    page.fill('input#POPUSERNAME', rut)  # credenciales de profe vale
-    page.fill('input#XYZ', password)  # credenciales de profe vale
-    page.click('text=INGRESO INTRANET')  # ingresar a la intranet
-    if not validate_login(page, logger): # Si el inicio de de sesion falla, muestra el mensaje de error y termina la función.
-        time.sleep(5)
-        return False
-    page.wait_for_load_state('networkidle')
-    return True
-    '''
-
-    logger("warning","Iniciando sesión en la intranet...")
-    try:
-        # Aumentamos el timeout e imprimimos exactamente en qué estado quedó
-        page.goto(link, timeout=45000, wait_until="domcontentloaded")
-        
-        page.fill('input#POPUSERNAME', rut)
-        page.fill('input#XYZ', password)
-        page.click('text=INGRESO INTRANET')
-        
-    except Exception as e:
-        logger("error", f"El navegador colapsó. Error exacto: {str(e)}")
-        print("El navegador colapsó. Error exacto:", str(e))
-        return False
-        
-    return True
-
-# Funcion para validar que el inicio de sesion fue exitoso.
-def validate_login(page: Page, logger: Callable[[str, str], None]) -> bool:
-    error_message_1 = page.locator('text=Su Rut o Clave no corresponden. Por favor intentelo nuevamente.')
-    error_message_2 = page.locator('text=El Rut ingresado es inválido')
-    error_message_3 = page.locator('text=Debe ingresar su Rut.')
-    error_message_4 = page.locator('text=Debe ingresar su Clave.')
-    if error_message_1.count() > 0 or error_message_2.count() > 0 or error_message_3.count() > 0 or error_message_4.count() > 0:
-        logger("error","Error al iniciar sesión, por favor revise sus credenciales")
-        time.sleep(5)
-        return False
-    logger("success","Inicio de sesión exitoso")
-    return True
+def login_intranet_requests(login_url: str, intranet_url: str, rut: str, password: str, logger: Callable[[str, str], None]) -> requests.Session | None:
+    session = requests.Session()
     
-
-# Selecciona la asignatura a la cual se le va a registrar la asistencia. Recibe como parametro el codigo de la asignatura y el modulo.
-def go_to_subject(page: Page, subject_code: str, subject_module: int, logger: Callable[[str, str], None]) -> bool:
-    if validate_user(page, logger):
-        logger("warning","Seleccionando asignatura...")
-        page.click('text=Académico')
-        page.click('text=Registro Asistencia')
-        page.wait_for_load_state('networkidle')
-        page.click(f'a.link_normal[href*="VerDetalle(2026,1,\'{subject_code}\',{subject_module})"]') # cliclear el ramo al que se le quiere subir la asistencia
-        page.wait_for_load_state('networkidle')
-        logger("success","Asignatura seleccionada exitosamente")
-        return True
-    return False
-
-# Se valida que el usuario sea academico.
-def validate_user(page: Page, logger: Callable[[str, str], None]) -> bool:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Origin": f"{intranet_url}",
+        "Referer": f"{intranet_url}/",
+        "Upgrade-Insecure-Requests": "1"
+    }
+    
+    # Aquí está el truco: usar las llaves exactas que espera el backend de PHP
+    payload = {
+        "Formulario[POPUSERNAME]": rut,
+        "Formulario[XYZ]": password
+    }
+    
+    logger("warning", f"Enviando POST a {login_url} con payload: {payload}")
+    
     try:
-        page.wait_for_selector(
-            "font:has-text('Académico')",
-            timeout=4000
-        )
-    except TimeoutError:
-        logger("error","El usuario no es academico.")
-        time.sleep(5)
-        return False
-
-    logger("success","El usuario es academico.")
-    time.sleep(1)
-    return True
-
-# Selecciona la pestaña de clases.
-def select_class_tab(page: Page, logger: Callable[[str, str], None]) -> bool:
-    logger("warning","Seleccionando pestaña de clases...")
-    page.click('a#regasist_clases')
-    page.wait_for_load_state('networkidle')
-    if not validate_selected_class(page, logger):
-        return False
-    page.wait_for_load_state('networkidle') # Ayuda a esperar a que cargue la página antes de seguir con el siguiente paso
-    return True
-
-# Valida que la clase teorica este configurada.
-def validate_selected_class(page: Page, logger: Callable[[str, str], None]) -> bool:
-    try:
-        page.wait_for_selector(
-            "strong:has-text('NO HA CONFIGURADO LOS TIPOS DE CLASES QUE REGISTRARÁN ASISTENCIA')",
-            timeout=5000
-        )
-    except TimeoutError:
-        logger("success","Pestana de clases seleccionada exitosamente")
-        return True
-
-    logger("error","Los tipos de clases no están configurados")
-    time.sleep(5)
-    return False
-
-# Selecciona la información de la clase, como el tipo, la fecha y la descripción de la clase.
-def select_class_info(page: Page, date: str, class_description: str, logger: Callable[[str, str], None]) -> bool:
-    logger("warning","Ingresando información de la clase...")
-    page.select_option('select[name="Formulario[cod_tipcla]"]', "T") # Selecciona el tipo de clase
-    page.fill('input#f_clase', date) # Ingresar la fecha de la clase
-    page.fill('textarea#observac', class_description) # Ingresar la descripción de la clase
-    page.click('text=AGREGAR') # Cliclear el botón de agregar para agregar la clase
-    if not validate_selected_info(page, logger):
-        return False
-    page.wait_for_load_state('networkidle')
-    time.sleep(5)
-    return True
-
-# Validar que la informacion de la clase haya sido seleccionada correctamente.
-def validate_selected_info(page: Page, logger: Callable[[str, str], None]) -> bool:
-    try:
-        page.wait_for_selector(
-            "strong:has-text('La clase fue registrada correctamente.')",
-            timeout=3000
-        )
-    except TimeoutError:
-        logger("error","No se ha registrado la clase.")
-        time.sleep(5)
-        return False
-
-    logger("success","Clase registrada correctamente")
-    return True
-
-# Selecciona la pestana de asistencia
-def select_atten_tab(page: Page, logger: Callable[[str, str], None]) -> bool:
-    logger("warning","Seleccionando pestaña de asistencia...")
-    page.click('a#regasist_asist') # cliclear la pestaña de asistencia para seleccionar a los estudiantes de la clase
-    if not validate_selected_atten(page, logger):
-        return False
-    page.wait_for_load_state('networkidle')
-    return True
-
-# Se valida que se haya seleccionado la pestaña de asistencia.
-def validate_selected_atten(page: Page, logger: Callable[[str, str], None]) -> bool:
-    try:
-        page.wait_for_selector(
-            "p:has-text('INGRESO DE ASISTENCIA POR CLASE')",
-            timeout=4000
-        )
-    except TimeoutError:
-        logger("error","No se ha logrado seleccionar la pestaña de asistencia.")
-        return False
-
-    logger("success","Se ha seleccionado la pestaña de asistencia correctamente.")
-    time.sleep(5)
-    return True
-
-# Selecciona a los estudiantes presentes en la clase
-def select_students(page: Page, date: str, class_description: str, presents: pd.DataFrame, logger: Callable[[str, str], None]) -> bool:
-    logger("warning","Seleccionando estudiantes presentes...")
-    option = (page.locator('select#cb_id_clase option')
-              .filter(has_text=date)
-              .filter(has_text=class_description)
-              .first) # Se obtiene el valor de la opcion que tiene la fecha de la case deseada
-    value = option.get_attribute('value') # Se obtiene el valor del atributo value de la opcion
-    page.select_option('select#cb_id_clase', value=value) # Se selecciona la clase con la fecha deseada en el select de clases
-    time.sleep(5)
-    click_present_students(page, presents, logger) # Se pasan las matriculas de los estudiantes presentes en la clase, se pueden obtener de un archivo excel o de una base de datos, pero como no tengo acceso a esa información, se pasan como ejemplo.
-    time.sleep(5) # Esperar a que se seleccionen los estudiantes antes de registrar la asistencia
-    if not register(page, logger): # Se registra la asistencia de los estudiantes presentes en la clase
-        return False
-    page.wait_for_load_state('networkidle')
-    return True
-
-# Clickea a los estudiantes que estan presentes en la clase.
-def click_present_students(page: Page, presents: pd.DataFrame, logger: Callable[[str, str], None]) -> None:
-    for matricula in presents['Matricula'].astype(str).values:
-        locator = page.locator(f'input[value="{matricula}*1"]')
-        page.wait_for_load_state('networkidle')
-        if locator.count() > 0:
-            locator.first.click(force=True)
+        # Hacemos el POST. requests guardará la cookie PHPSESSID automáticamente en 'session'
+        response = session.post(login_url, data=payload, headers=headers, timeout=15)
+        
+        # Verificamos si la redirección funcionó o si entramos a la portada
+        if "portada.php" in response.url or "Bienvenido" in response.text or response.status_code == 200:
+            logger("success", f"Redirigido a: {response.url}")
+            logger("success", "Inicio de sesión exitoso.")
+            return session
         else:
-            print(f"Matrícula {matricula} no encontrada en la página web. Saltando...")
-    page.wait_for_load_state('networkidle')
-    logger("success","Estudiantes marcados como presentes")
+            logger("error", "Credenciales incorrectas o servidor rechazó el login.")
+            return None
+            
+    except Exception as e:
+        logger("error", f"Error de red: {str(e)}")
+        return None
+    
+def go_to_subject_requests(session: requests.Session, subject_code: str, subject_module: int, intranet_url: str, date: str, logger: Callable[[str, str], None]) -> bool:
+    
+    # URL 1: Entrar al ramo
+    detalle_url = f"{intranet_url}/academico/asistencia/ver_regasist_det.php"
+    
+    # URL 2: Cargar la configuración (AJAX)
+    conf_url = f"{intranet_url}/academico/asistencia/regasist_conf.php"
+    
+    headers_base = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Origin": f"{intranet_url}",
+        "Referer": f"{intranet_url}/academico/asistencia/ver_regasist.php"
+    }
+    periodos = get_academic_period(date)
+    print(f"Parámetros del periodo académico calculados: {periodos}")
+    # Armamos el payload dinámico con los parámetros que recibe la función
+    payload_detalle = {
+        "Formulario[periodo]": periodos["Formulario[periodo]"],  
+        "Formulario[ano_asist]": periodos["Formulario[ano_asist]"],
+        "Formulario[sem_asist]": periodos["Formulario[sem_asist]"],
+        "Formulario[cod_asist]": subject_code,
+        "Formulario[mod_asist]": str(subject_module)
+    }
 
-# Paso final del registro, se encarga de presionar el boton REGISTRAR y verificar si fue correcto
-def register(page: Page, logger: Callable[[str, str], None]) -> bool:
-    logger("warning","Registrando asistencia...")
-    page.wait_for_load_state('networkidle')
-    page.click('input[type="button"][value="REGISTRAR"]') # Cliclear registrar ultimo paso
-    if not validate_registration(page, logger):
-        return False
-    return True
+    payload_conf = {
+        "MAX_FILE_SIZE": "10000000",
+        "Formulario[parametro]": "",
+        "Formulario[buscar]": "0",
+        "Formulario[editar]": "0"
+    }
 
-# Valida que la asistencia se haya registrado correctamente, buscando un mensaje de confirmación en la página.
-def validate_registration(page: Page, logger: Callable[[str, str], None]) -> bool:
+    logger("warning", f"Payload para detalle: {payload_detalle}")
+    logger("warning", f"Ingresando a la asignatura {subject_code} con módulo {subject_module}...")
+
     try:
-        page.wait_for_selector(
-            "strong:has-text('La asistencia fue registrada exitósamente.')",
-            timeout=5000
-        )
-    except TimeoutError:
-        logger("error","Error al registrar la asistencia, por favor intente nuevamente")
-        time.sleep(5)
+        # 1. Hacemos el POST para entrar a la asignatura
+        res_detalle = session.post(detalle_url, data=payload_detalle, headers=headers_base, timeout=15)
+        
+        if res_detalle.status_code == 200 and subject_code in res_detalle.text:
+            
+            # 2. Hacemos el POST secundario (AJAX) para cargar la configuración de la vista
+            headers_ajax = headers_base.copy()
+            headers_ajax["X-Requested-With"] = "XMLHttpRequest"
+            headers_ajax["Referer"] = detalle_url # El referer cambia ahora que estamos dentro
+            
+            session.post(conf_url, data=payload_conf, headers=headers_ajax, timeout=15)
+            
+            logger("success", "Asignatura seleccionada y configurada exitosamente en el servidor.")
+            return True
+        else:
+            logger("error", "No se pudo acceder a la asignatura.")
+            return False
+            
+    except Exception as e:
+        logger("error", f"Error de red al navegar a la asignatura: {str(e)}")
         return False
-    logger("success","Asistencia subida exitosamente a intranet")
-    return True
+
+def create_class_requests(session: requests.Session, date: str, class_description: str, intranet_url: str, logger: Callable[[str, str], None]) -> bool:
+    
+    # URL que hace la inserción en la base de datos
+    crear_clase_url = f"{intranet_url}/academico/asistencia/regasist_clases_ing.php"
+    
+    headers_ajax = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": f"{intranet_url}",
+        "Referer": f"{intranet_url}/academico/asistencia/ver_regasist_det.php"
+    }
+
+    # El payload exacto que capturaste. 
+    # requests se encargará de transformar los espacios y los '/' automáticamente (URL encoding).
+    payload = {
+        "MAX_FILE_SIZE": "10000000",
+        "Formulario[cod_tipcla]": "T",
+        "Formulario[f_clase]": date,                 # Ejemplo: "27/04/2026"
+        "Formulario[observac]": class_description,   # Ejemplo: "Clase 13 test"
+        "Formulario[cod_tarch]": "",
+        "Formulario[id_clase]": "",
+        "Formulario[parametro]": "",
+        "Formulario[buscar]": "0",
+        "Formulario[editar]": "0"
+    }
+
+    logger("warning", f"Registrando la clase del {date} a nivel de red...")
+    
+    try:
+        response = session.post(crear_clase_url, data=payload, headers=headers_ajax, timeout=15)
+        
+        # Generalmente, estos scripts de PHP devuelven un código HTTP 200 si todo sale bien, 
+        # a veces acompañados de un mensaje de éxito en texto o JSON.
+        if response.status_code == 200:
+            logger("success", "Clase registrada correctamente en el servidor.")
+            return True
+        else:
+            logger("error", f"Error al registrar la clase. Status Code: {response.status_code}")
+            return False
+            
+    except Exception as e:
+        logger("error", f"Error de red al registrar la clase: {str(e)}")
+        return False
+
+def submit_attendance_requests(session: requests.Session, class_id: str, presentes: pd.DataFrame, intranet_url: str, logger: Callable[[str, str], None]) -> bool:
+    
+    # URL 1: Obtener el HTML con la lista de alumnos
+    list_url = f"{intranet_url}/academico/asistencia/regasist_asist_lst.php"
+    # URL 2: Registrar la asistencia final
+    submit_url = f"{intranet_url}/academico/asistencia/regasist_asist_ing.php"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": f"{intranet_url}",
+        "Referer": f"{intranet_url}/academico/asistencia/ver_regasist_det.php"
+    }
+
+    # 1. Pedir la tabla HTML para esta clase
+    payload_list = {
+        "MAX_FILE_SIZE": "10000000",
+        "Formulario[cb_id_clase]": class_id,
+        "Formulario[parametro]": "",
+        "Formulario[buscar]": "0",
+        "Formulario[editar]": "0"
+    }
+    
+    logger("warning", f"Obteniendo tabla HTML para la clase ID {class_id}...")
+    
+    try:
+        response_list = session.post(list_url, data=payload_list, headers=headers, timeout=15)
+        
+        if response_list.status_code != 200:
+            logger("error", f"Error al obtener la lista de alumnos. HTTP: {response_list.status_code}")
+            return False
+
+        # --- EXTRACCIÓN DINÁMICA CON BEAUTIFULSOUP ---
+        soup = BeautifulSoup(response_list.text, 'html.parser')
+        maestra_matriculas = {}
+        
+        # Buscamos todas las etiquetas <input> en el código fuente
+        for input_tag in soup.find_all('input'):
+            name = input_tag.get('name', '')
+            value_raw = str(input_tag.get('value', '')).strip().upper()
+            
+            # Filtramos exactamente el input que encontraste: 
+            # Empieza con "Formulario[" y su valor contiene "*1"
+            if name.startswith('Formulario[') and '*1' in value_raw:
+                # 1. Extraemos el índice (ej: "Formulario[1]" -> "1")
+                index = name.split('[')[-1].replace(']', '')
+                
+                # 2. Extraemos la matrícula (ej: "22437606526*1" -> "22437606526")
+                matricula = value_raw.split('*')[0]
+                
+                # Guardamos en el diccionario maestro si el índice es válido
+                if index.isdigit():
+                    maestra_matriculas[matricula] = index
+
+        total_alumnos = len(maestra_matriculas)
+        logger("info", f"Extracción exitosa: {total_alumnos} alumnos detectados usando los inputs de asistencia.")
+
+        if total_alumnos == 0:
+            logger("warning", "🚨 ALERTA: No se detectaron alumnos. El HTML podría estar vacío o haber caducado la sesión.")
+            return False
+
+        # --- CONSTRUCCIÓN DEL PAYLOAD FINAL ---
+        final_payload = {
+            "MAX_FILE_SIZE": "10000000",
+            "Formulario[cb_id_clase]": class_id,
+            "Formulario[num_alum]": str(total_alumnos),
+            "Formulario[id_clase]": class_id, 
+            "Formulario[cod_tipcla]": "",
+            "Formulario[accion]": "",
+            "Formulario[parametro]": "",
+            "Formulario[buscar]": "0",
+            "Formulario[editar]": "0"
+        }
+
+        # Aunque leímos el radio button, el servidor IGUAL espera el array de matrículas
+        # Así que lo reconstruimos en el payload dinámicamente
+        for matricula, index in maestra_matriculas.items():
+            final_payload[f"Formulario[matricula][{index}]"] = matricula
+
+        # Limpiamos el CSV: forzamos a texto, quitamos espacios ocultos y pasamos a mayúscula
+        rut_presentes = set(presentes['Matricula'].astype(str).values)
+        
+        alumnos_marcados = 0
+        
+        # Marcamos las asistencias definitivas
+        for matricula, index in maestra_matriculas.items():
+            if matricula in rut_presentes:
+                final_payload[f"Formulario[{index}]"] = f"{matricula}*1"
+                alumnos_marcados += 1
+
+        logger("info", f"Marcando {alumnos_marcados} presentes (de {len(rut_presentes)} en CSV).")
+        
+        # 2. Enviar el paquete final
+        logger("info", "Enviando registro a la base de datos de la universidad...")
+        response_submit = session.post(submit_url, data=final_payload, headers=headers, timeout=20)
+        
+        if response_submit.status_code == 200:
+            logger("success", "¡Asistencia subida exitosamente!")
+            return True
+        else:
+            logger("error", f"El servidor falló al registrar. HTTP: {response_submit.status_code}")
+            return False
+            
+    except Exception as e:
+        logger("error", f"Error crítico de red: {str(e)}")
+        return False
+
+def get_academic_period(date_str: str) -> dict:
+    """
+    Recibe una fecha en formato 'DD/MM/YYYY' y devuelve el diccionario 
+    con los parámetros del semestre para la intranet.
+    """
+    # Convertimos el string a un objeto de fecha
+    date_obj = datetime.strptime(date_str, "%d/%m/%Y")
+    
+    year = str(date_obj.year)
+    # Asumimos: Enero a Julio (1 a 7) es Semestre 1. Agosto a Diciembre (8 a 12) es Semestre 2.
+    semester = "1" if date_obj.month <= 7 else "2"
+    
+    return {
+        "Formulario[periodo]": f"{year}{semester}", # Ej: "20261"
+        "Formulario[ano_asist]": year,              # Ej: "2026"
+        "Formulario[sem_asist]": semester           # Ej: "1"
+    }
+
+def get_class_id_requests(session: requests.Session, date: str, link:str,class_description: str, logger: Callable[[str, str], None]) -> str | None:
+    """
+    Obtiene la tabla de clases desde el servidor y busca el ID de la clase 
+    que coincida exactamente con la fecha y la descripción dada.
+    """
+    # Esta es la URL que carga la tabla visual que me mostraste
+    url_tabla_clases = f"{link}/academico/asistencia/regasist_clases.php"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": f"{link}",
+        "Referer": f"{link}academico/asistencia/ver_regasist_det.php"
+    }
+
+    # Payload base para pedir que nos devuelva la tabla
+    payload = {
+        "MAX_FILE_SIZE": "10000000",
+        "Formulario[cod_tipcla]": "",
+        "Formulario[f_clase]": "",
+        "Formulario[observac]": "",
+        "Formulario[cod_tarch]": "",
+        "Formulario[id_clase]": "",
+        "Formulario[parametro]": "",
+        "Formulario[buscar]": "0",
+        "Formulario[editar]": "0"
+    }
+
+    logger("info", f"Buscando ID interno para la clase del {date}...")
+
+    try:
+        response = session.post(url_tabla_clases, data=payload, headers=headers, timeout=15)
+        
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Buscamos todas las filas <tr> de la tabla
+            for tr in soup.find_all('tr'):
+                tds = tr.find_all('td')
+                
+                # Nos aseguramos de que la fila tenga al menos 4 columnas de datos
+                if len(tds) >= 4:
+                    f_clase = tds[2].text.strip()
+                    desc = tds[3].text.strip()
+                    
+                    # Si la fecha y la descripción coinciden con las que acabamos de crear
+                    if f_clase == date and desc == class_description:
+                        # Extraemos el ID de la primera columna
+                        class_id = tds[0].text.strip()
+                        logger("info", f"¡Match encontrado! El ID de la clase es: {class_id}")
+                        return class_id
+            
+            logger("warning", "No se encontró la clase en la tabla. Verifica si se creó correctamente.")
+            return None
+        else:
+            logger("error", "Error al cargar la tabla de clases.")
+            return None
+            
+    except Exception as e:
+        logger("error", f"Error de red al buscar el ID: {str(e)}")
+        return None

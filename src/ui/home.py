@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 import sys
 import streamlit as st
@@ -11,17 +10,6 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.db.sp_connection import SP_Handler
 
 sp_connection = SP_Handler()
-
-@st.cache_resource
-def install_playwright():
-    try:
-        subprocess.run(["playwright", "install", "chromium"], check=True)
-        print("Playwright y Chromium instalados correctamente.")
-    except subprocess.CalledProcessError as e:
-        print(f"Error crítico al instalar Playwright: {e}")
-        st.error("Hubo un problema al configurar el navegador en el servidor.")
-
-install_playwright()
 
 st.logo(
     "https://i.imgur.com/YMei8p1.png",
