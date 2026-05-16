@@ -31,7 +31,7 @@ def intranet_access(date: str, subject_code: str, subject_modules: list, present
                 elif type == "error":
                     place_holder.error(message)
 
-            intranet_workflow(get_proxy_url, st.secrets["INTRANET_URL"], st.secrets["INTRANET_LOGIN_URL"], rut, password, subject_code, selected_module, date, description, presentes, ui_logger)# Se llama a la funcion de handler.
+            intranet_workflow(get_proxy_url(), st.secrets["INTRANET_URL"], st.secrets["INTRANET_LOGIN_URL"], rut, password, subject_code, selected_module, date, description, presentes, ui_logger)# Se llama a la funcion de handler.
 
 @st.cache_data(ttl=60)
 def get_proxy_url() -> str:
