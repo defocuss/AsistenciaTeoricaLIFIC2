@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from src.handlers.intranet_handler import intranet_workflow
-from src.db.sp_connection import SPConnection
+from src.db.sp_connection import SP_Handler
 
 # Dialogo de ingreso de credenciales para acceder a la intranet, pide el rut, clave y la descipcion de la clase
 @st.dialog("Credenciales Intranet", dismissible=True)
@@ -36,7 +36,7 @@ def intranet_access(date: str, subject_code: str, subject_modules: list, present
 @st.cache_data(ttl=60)
 def get_proxy_url() -> str:
     try:
-        handler = SPConnection()
+        handler = SP_Handler()
         return handler.get_proxy_url().replace("tcp://", "https://")
     except KeyError:
         st.error("Error: PROXY_URL no encontrado en los secretos.")
