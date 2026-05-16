@@ -168,3 +168,20 @@ class SP_Handler:
         except Exception as e:
             st.error(f"Error al obtener la hoja de cálculo: {e}")
             return None
+        
+    def get_proxy_url(self) -> str:
+        try:
+            result = execute_query(
+                self.client.table("Proxy_Config")
+                .select("url")
+                .eq("id", 1)
+                .limit(1),
+                ttl=0
+            ).data
+            if result:
+                return result[0]["url"]
+            else:
+                return None
+        except Exception as e:
+            st.error(f"Error al obtener la URL del proxy: {e}")
+            return None
