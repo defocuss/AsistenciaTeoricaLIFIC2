@@ -33,6 +33,9 @@ def login_intranet_requests(link_proxy: str, login_url: str, intranet_url: str, 
             "http": link_proxy,
             "https": link_proxy
         })
+    else: 
+        logger("error", "No se encontró URL de proxy en la base de datos.")
+        return None
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0",
@@ -179,55 +182,16 @@ def submit_attendance_requests(session: requests.Session, class_id: str, present
             logger("error", f"Error al obtener la lista de alumnos. HTTP: {response_list.status_code}")
             return False
 
-        soup = BeautifulSoup(response_list.text, 'html.parser')
-        maestra_matriculas = {}
-        
-        for input_tag in soup.find_all('input'):
-            name = input_tag.get('name', '')
-            value_raw = str(input_tag.get('value', '')).strip().upper()
-            
-            if name.startswith('Formulario[') and '*1' in value_raw:
-                # Indice del formulario
-                index = name.split('[')[-1].replace(']', '')
-                
-                # Obtener matricula antes del '*'
-                matricula = value_raw.split('*')[0]
-                
-                # Guardamos en el diccionario maestro si el índice es válido
-                if index.isdigit():
-                    maestra_matriculas[matricula] = index
+        maestra_matriculas = parse_attendance_inputs(response_list.text)
 
         total_alumnos = len(maestra_matriculas)
         logger("info", f"Extracción exitosa: {total_alumnos} alumnos detectados usando los inputs de asistencia.")
 
         if total_alumnos == 0:
-            logger("warning", "🚨 ALERTA: No se detectaron alumnos. El HTML podría estar vacío o haber caducado la sesión.")
+            logger("warning", "ALERTA: No se detectaron alumnos. El HTML podría estar vacío o haber caducado la sesión.")
             return False
 
-        final_payload = {
-            "MAX_FILE_SIZE": "10000000",
-            "Formulario[cb_id_clase]": class_id,
-            "Formulario[num_alum]": str(total_alumnos),
-            "Formulario[id_clase]": class_id, 
-            "Formulario[cod_tipcla]": "",
-            "Formulario[accion]": "",
-            "Formulario[parametro]": "",
-            "Formulario[buscar]": "0",
-            "Formulario[editar]": "0"
-        }
-
-        for matricula, index in maestra_matriculas.items():
-            final_payload[f"Formulario[matricula][{index}]"] = matricula
-
-        rut_presentes = set(presentes['Matricula'].astype(str).values)
-        
-        alumnos_marcados = 0
-        for matricula, index in maestra_matriculas.items():
-            if matricula in rut_presentes:
-                final_payload[f"Formulario[{index}]"] = f"{matricula}*1"
-                alumnos_marcados += 1
-
-        logger("info", f"Marcando {alumnos_marcados} presentes (de {len(rut_presentes)} en CSV).")
+        final_payload = build_attendance_payload(class_id, presentes, maestra_matriculas, logger)
         logger("info", "Enviando registro a la base de datos de la universidad...")
         response_submit = session.post(submit_url, data=final_payload, headers=headers, timeout=20)
         
@@ -241,6 +205,57 @@ def submit_attendance_requests(session: requests.Session, class_id: str, present
     except Exception as e:
         logger("error", f"Error crítico de red: {str(e)}")
         return False
+
+def build_attendance_payload(class_id: str, presentes: pd.DataFrame, maestra_matriculas: dict[str, str], logger: Callable[[str, str], None]) -> dict[str, str]:
+
+    payload = {
+        "MAX_FILE_SIZE": "10000000",
+        "Formulario[cb_id_clase]": class_id,
+        "Formulario[num_alum]": str(len(maestra_matriculas)),
+        "Formulario[id_clase]": class_id, 
+        "Formulario[cod_tipcla]": "",
+        "Formulario[accion]": "",
+        "Formulario[parametro]": "",
+        "Formulario[buscar]": "0",
+        "Formulario[editar]": "0"
+    }
+
+    for matricula, index in maestra_matriculas.items():
+        payload[f"Formulario[matricula][{index}]"] = matricula
+
+    rut_presentes = set(presentes['Matricula'].astype(str).values)
+    
+    alumnos_marcados = 0
+    for matricula, index in maestra_matriculas.items():
+        if matricula in rut_presentes:
+            payload[f"Formulario[{index}]"] = f"{matricula}*1"
+            alumnos_marcados += 1
+
+    logger("info", f"Marcando {alumnos_marcados} presentes (de {len(rut_presentes)} en CSV).")
+
+    return payload
+
+def parse_attendance_inputs(html: str) -> dict[str, str]:
+    matriculas = {}
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    for input_tag in soup.find_all('input'):
+        name = input_tag.get('name', '')
+        value_raw = str(input_tag.get('value', '')).strip().upper()
+        
+        if name.startswith('Formulario[') and '*1' in value_raw:
+            # Indice del formulario
+            index = name.split('[')[-1].replace(']', '')
+            
+            # Obtener matricula antes del '*'
+            matricula = value_raw.split('*')[0]
+            
+            # Guardamos en el diccionario maestro si el índice es válido
+            if index.isdigit():
+                matriculas[matricula] = index
+    
+    return matriculas
+
 
 # Recibe una fecha dia/mes/año y devuelve un diccionario con los campos necesarios para saber el semetre
 def get_academic_period(date_str: str) -> dict:
@@ -287,19 +302,9 @@ def get_class_id_requests(session: requests.Session, date: str, link:str,class_d
         response = session.post(url_tabla_clases, data=payload, headers=headers, timeout=15)
         
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            for tr in soup.find_all('tr'):
-                tds = tr.find_all('td')
-                if len(tds) >= 4:
-                    f_clase = tds[2].text.strip()
-                    desc = tds[3].text.strip()
-                    if f_clase == date and desc == class_description:
-                        class_id = tds[0].text.strip()
-                        logger("info", f"¡Match encontrado! El ID de la clase es: {class_id}")
-                        return class_id
-            
-            logger("warning", "No se encontró la clase en la tabla. Verifica si se creó correctamente.")
-            return None
+            class_id = find_class_id_from_html(response.text, date, class_description, logger)
+            if class_id != None:
+                return class_id
         else:
             logger("error", "Error al cargar la tabla de clases.")
             return None
@@ -307,3 +312,16 @@ def get_class_id_requests(session: requests.Session, date: str, link:str,class_d
     except Exception as e:
         logger("error", f"Error de red al buscar el ID: {str(e)}")
         return None
+
+def find_class_id_from_html(html: str, date: str, class_description: str, logger: Callable[[str, str], None]) -> str | None:
+    soup = BeautifulSoup(html, 'html.parser')
+    for tr in soup.find_all('tr'):
+        tds = tr.find_all('td')
+        if len(tds) >= 4:
+            f_clase = tds[2].text.strip()
+            desc = tds[3].text.strip()
+            if f_clase == date and desc == class_description:
+                logger ("info", f"¡Match encontrado en HTML! El ID de la clase es: {tds[0].text.strip()}")
+                return tds[0].text.strip()
+    logger("warning", "No se encontró la clase en el HTML proporcionado.")
+    return None
