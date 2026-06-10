@@ -194,9 +194,8 @@ def get_reunion_data(registration_file) -> dict:
     date = reformat_date(date)
     id_reunion = registration.iloc[1,1].strip()
     subject = registration.iloc[1,0]
-    subject_code = subject.split(" ")[0]
 
-    reunion_data = {"Duracion": duration, "Minimum": minimum_presentent_duration, "Date": date, "ID": id_reunion, "SubjectCode": subject_code}
+    reunion_data = {"Duracion": duration, "Minimum": minimum_presentent_duration, "Date": date, "ID": id_reunion, "SubjectCode": subject}
     return reunion_data
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
@@ -288,11 +287,13 @@ def write_merge_data(files:list, minimum_duration:int) -> pd.DataFrame:
 
 # Manejar la logica de mergear los archivos y mostrar el resultado
 def merged_handler(files:list) -> bool:
+    handler = SP_Handler()
     for file_pair in files:
         file_pair[0].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
         file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
     date = get_reunion_data(files[0][1])["Date"]
-    subject_code = get_reunion_data(files[0][1])["SubjectCode"]
+    subject_code = handler.get_signature_code(get_reunion_data(files[0][1])["SubjectCode"])
+
     merged_data = write_merge_data(files, get_reunion_data(files[0][1])["Minimum"])
     if merged_data is not None:
         st.write("Archivos fusionados exitosamente.")

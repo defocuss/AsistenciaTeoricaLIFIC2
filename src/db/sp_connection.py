@@ -1,3 +1,4 @@
+from pandas import testing
 from unicodedata import name
 from st_supabase_connection import SupabaseConnection, execute_query
 import streamlit as st
@@ -168,6 +169,18 @@ class SP_Handler:
         except Exception as e:
             st.error(f"Error al obtener la hoja de cálculo: {e}")
             return None
+    
+    def is_code_correct(self, code: str) -> bool:
+        try:
+            return execute_query(
+                self.client.table("Asignatura")
+                .select("codigo")
+                .eq("codigo", code)
+                .limit(1),
+                ttl=0).data
+        except Exception as e:
+            st.error(f"Error al verificar el código: {e}")
+            return False
         
     def get_proxy_url(self) -> str:
         try:
@@ -185,3 +198,36 @@ class SP_Handler:
         except Exception as e:
             st.error(f"Error al obtener la URL del proxy: {e}")
             return None
+
+    def get_signatures_names(self) -> list:
+        try:
+            return execute_query(
+                self.client.table("Asignatura")
+                .select("codigo, nombre_asignatura"),
+                ttl=0).data
+        except Exception as e:
+            st.error(f"Error al obtener el nombre de la asignatura: {e}")
+            return None
+    
+    def get_signature_code(self, name:str) -> str:
+        if self.is_code_correct(name):
+            return name
+
+        for element in name.split(" "):
+            if self.is_code_correct(element):
+                return element
+        
+        signature_data = self.get_signatures_names()
+
+        clean_name = (name.strip().lower()
+            .replace("á","a").replace("é","e")
+            .replace("í","i").replace("ó","o")
+            .replace("ú","u").replace("ñ","n"))
+
+        for signature in signature_data:
+            if signature["nombre_asignatura"] in clean_name:
+                return signature["codigo"]
+        
+        st.error(f"Error al obtener el nombre de la asignatura: {name}")
+        return None
+                
