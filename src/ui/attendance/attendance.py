@@ -44,7 +44,7 @@ def show_meeting_files_table(meeting_files: list) -> None:
 
     table = pd.DataFrame(rows)
     st.subheader("Archivos detectados por reunión")
-    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.dataframe(table, width='stretch', hide_index=True)
 
 # Verificar el formato interior del archivo participants, tipo 1.
 def verify_attendance_file_type_1(data: pd.DataFrame) -> bool:
@@ -163,7 +163,6 @@ def get_same_meeting_files(files:list) -> list:
     seen_meetings_ids = set()
     for file in files:
         meeting_id = file.name.split("_")[1]
-        print(meeting_id)
         if meeting_id in seen_meetings_ids:
             continue
         seen_meetings_ids.add(meeting_id)
@@ -180,8 +179,6 @@ def get_same_meeting_files(files:list) -> list:
                     attendance_file = second_file
                     meeting_organized_list.append([attendance_file, registration_file])
     
-    print(len(meeting_organized_list))
-    print(len(files))
     if len(meeting_organized_list) != len(files) // 2:
         st.write("No se encontraron archivos correspondientes a la misma reunión.")
         return []
@@ -200,7 +197,6 @@ def get_reunion_data(registration_file) -> dict:
     subject_code = subject.split(" ")[0]
 
     reunion_data = {"Duracion": duration, "Minimum": minimum_presentent_duration, "Date": date, "ID": id_reunion, "SubjectCode": subject_code}
-    print(reunion_data)
     return reunion_data
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
@@ -312,7 +308,7 @@ def show_present_students(merged_file:pd.DataFrame, minimum_duration:int, date:s
     if merged_file is not None:
         present_students = merged_file[merged_file["Tiempo"] >= minimum_duration]
         st.write(f"### Estudiantes presentes en {subject_code}")
-        st.dataframe(present_students, use_container_width=True)
+        st.dataframe(present_students, width='stretch')
         csv_data = present_students.to_csv(index=False).encode('utf-8')
         handler = SP_Handler()
         modules = handler.get_modules_by_code(subject_code) # Lista de los modulos.
@@ -334,7 +330,7 @@ def show_absent_students(merged_file:pd.DataFrame, minimum_duration:int, date:st
     if merged_file is not None:
         absent_students = merged_file[merged_file["Tiempo"] < minimum_duration]
         st.write("### Estudiantes ausentes")
-        st.dataframe(absent_students, use_container_width=True)
+        st.dataframe(absent_students, width='stretch')
         csv_data = absent_students.to_csv(index=False).encode('utf-8')
         st.download_button("Descargar ausentes", csv_data, "Alumnos ausentes {}.csv".format(date), "text/csv", key='Ausentes-csv', icon=":material/download:")
         return True
@@ -344,7 +340,7 @@ def show_absent_students(merged_file:pd.DataFrame, minimum_duration:int, date:st
 def show_merged_csv(merged_file:pd.DataFrame, date:str)-> bool:
     if merged_file is not None:
         st.write(f"### Todos los alumnos")
-        st.dataframe(merged_file, use_container_width=True)
+        st.dataframe(merged_file, width='stretch')
         csv_data = merged_file.to_csv(index=False).encode('utf-8')
         st.download_button("Descargar todos los alumnos", csv_data, "Alumnos {}.csv".format(date), "text/csv", key=f'Clasificados-csv', icon=":material/download:")
         return True
@@ -373,7 +369,6 @@ def get_reunion_metrics(merged_file:pd.DataFrame, minimum_duration:int) -> dict:
 def show_reunion_metrics(metrics:dict, reunion_date:str, maximo:int) -> None:
     st.write(f"### Métricas de la reunión del {reunion_date}")
     col11, col22, col33 = st.columns(3)
-    col33.metric("", "")
     col11.metric("Tiempo total", "{} min".format(maximo))
     col22.metric("Tiempo mínimo para estar presente", "{} min".format(metrics["Minimo"]))
     
