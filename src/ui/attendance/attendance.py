@@ -282,6 +282,8 @@ def write_merge_data(files:list, minimum_duration:int) -> pd.DataFrame:
     reunion_data = get_reunion_data(files[0][1])
     reunion_date = reunion_data['Date'].replace("/", "-").replace(" ", "--") # Reemplazar los caracteres de fecha para que sea compatible con el nombre del archivo
 
+    merged_data = merged_data.sort_values(by=["Estado", "Nombre"], ascending=[False, True]).reset_index(drop=True) # Se ordenan los estudiantes para que los presentes esten primero y se resetea el index
+
     return merged_data
 
 # Manejar la logica de mergear los archivos y mostrar el resultado
