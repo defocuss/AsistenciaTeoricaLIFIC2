@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.db.sp_connection import SP_Handler
 
-def upload_presents_spreadsheet(class_number: str, subject_module:int, subject_code:str, students:pd.DataFrame) -> bool:
+def upload_presents_spreadsheet(class_number: str, subject_module:int, subject_code:str, students:pd.DataFrame, reunion_time: str) -> bool:
     with st.spinner("Subiendo datos a Sheets..."):
         try:
             sheet = get_sheet(subject_module, subject_code) # Se obtiene la hoja de google sheets.
@@ -25,6 +25,9 @@ def upload_presents_spreadsheet(class_number: str, subject_module:int, subject_c
             worksheet = format_worksheet(worksheet, total_rows) # Se formatea la hoja
 
             gd.set_with_dataframe(worksheet, students)
+
+            worksheet.update_acell('I3', 'Tiempo (min)') # Se actualzia la celda con titulo de tiempo
+            worksheet.update_acell('I4', reunion_time) # Se actualiza la celda con el tiempo de reunion
                         
             st.success("Asistencia subida exitosamente a sheets")
         except Exception as e:
@@ -49,6 +52,28 @@ def format_worksheet(worksheet: gspread.Worksheet, range: int) -> gspread.Worksh
             "left": {"style": "SOLID"},
             "right": {"style": "SOLID"}
         },
+        "wrapStrategy": "WRAP"
+    })
+
+    # Formato encabezado
+    worksheet.format("I3", {
+        "textFormat": {
+            "bold": True,
+            "foregroundColor": {"red": 1.0, "green": 1.0, "blue": 1.0}
+        },
+        "backgroundColor": {"red": 0.2, "green": 0.2, "blue": 0.2},
+        "horizontalAlignment": "CENTER"
+    })
+
+    # Formato bordes y centrado para la duracion de la clase
+    worksheet.format("I3:I4", {
+        "borders": {
+            "top": {"style": "SOLID"},
+            "bottom": {"style": "SOLID"},
+            "left": {"style": "SOLID"},
+            "right": {"style": "SOLID"}
+        },
+        "horizontalAlignment": "CENTER", # Para que el tiempo en I4 también quede centrado
         "wrapStrategy": "WRAP"
     })
 

@@ -298,7 +298,7 @@ def merged_handler(files:list) -> bool:
     merged_data = write_merge_data(files, get_reunion_data(files[0][1])["Minimum"])
     if merged_data is not None:
         st.write("Archivos fusionados exitosamente.")
-        show_present_students(merged_data, get_reunion_data(files[0][1])["Minimum"], date, subject_code)
+        show_present_students(merged_data, get_reunion_data(files[0][1])["Minimum"], date, subject_code, get_reunion_data(files[0][1])["Duracion"])
         show_absent_students(merged_data, get_reunion_data(files[0][1])["Minimum"], date)
         show_merged_csv(merged_data, date)
         show_reunion_metrics(get_reunion_metrics(merged_data, get_reunion_data(files[0][1])["Minimum"]), date, get_reunion_data(files[0][1])["Duracion"])
@@ -308,7 +308,7 @@ def merged_handler(files:list) -> bool:
         return False
 
 # Muestra los estudiantes presentes en la reunion. //esto podria cambiarlo para que devuelva un dataframe con los estudiantes presentes.
-def show_present_students(merged_file:pd.DataFrame, minimum_duration:int, date:str, subject_code:str) -> bool:
+def show_present_students(merged_file:pd.DataFrame, minimum_duration:int, date:str, subject_code:str, reunion_time:int) -> bool:
     if merged_file is not None:
         present_students = merged_file[merged_file["Tiempo"] >= minimum_duration]
         st.write(f"### Estudiantes presentes en {subject_code}")
@@ -325,7 +325,7 @@ def show_present_students(merged_file:pd.DataFrame, minimum_duration:int, date:s
                 intranet_access(date, subject_code, modules, present_students[["Matricula"]]) # solo para testeo
         with col3:
             if st.button("Subir a sheets", icon=":material/upload:"):
-                select_class(subject_code, modules, merged_file[["Matricula", "Nombre", "Apellido", "Correo", "Tiempo", "Estado"]]) # Solo para testeo, se deja seleccionado el modulo 1 por defecto, ya que no tengo acceso a la base de datos para obtener los modulos de cada asignatura, para testear la funcion de subida a sheets se puede descomentar esta linea y comentar la linea de upload_presents_spreadsheet
+                select_class(subject_code, modules, merged_file[["Matricula", "Nombre", "Apellido", "Correo", "Tiempo", "Estado"]], reunion_time) # Solo para testeo, se deja seleccionado el modulo 1 por defecto, ya que no tengo acceso a la base de datos para obtener los modulos de cada asignatura, para testear la funcion de subida a sheets se puede descomentar esta linea y comentar la linea de upload_presents_spreadsheet
         return True
     return False
 
