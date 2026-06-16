@@ -30,7 +30,8 @@ def intranet_access(date: str, subject_code: str, subject_modules: list, present
                     place_holder.success(message)
                 elif type == "error":
                     place_holder.error(message)
-            proxy_url = get_proxy_url()
+            #proxy_url = get_proxy_url()
+            proxy_url = st.secrets["PROXY_URL"]
             print(f"Proxy URL obtenida: {proxy_url}")  # Debug: Verificar que se obtiene la URL del proxy correctamente
             intranet_workflow(proxy_url, st.secrets["INTRANET_URL"], st.secrets["INTRANET_LOGIN_URL"], rut, password, subject_code, selected_module, date, description, presentes, ui_logger)# Se llama a la funcion de handler.
 
