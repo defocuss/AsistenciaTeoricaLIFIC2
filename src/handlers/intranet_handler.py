@@ -3,6 +3,7 @@ from typing import Callable
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import re
 
 
 def intranet_workflow(link_proxy: str, link_intranet: str, login_url: str, rut: str, password: str, subject_code: str, subject_module: int, date: str, class_description: str, presentes: pd.DataFrame, logger: Callable[[str,str], None]) -> None:
@@ -321,7 +322,10 @@ def find_class_id_from_html(html: str, date: str, class_description: str, logger
             f_clase = tds[2].text.strip()
             desc = tds[3].text.strip()
             if f_clase == date and desc == class_description:
-                logger ("info", f"¡Match encontrado en HTML! El ID de la clase es: {tds[0].text.strip()}")
-                return tds[0].text.strip()
+                match = re.search(r"EditarClases\('?(\d+)'?\)", tds[4].find('a')['href'])
+                if match:
+                    class_id = match.group(1)
+                    logger("info", f"¡Match encontrado en HTML! El ID de la clase es: {class_id}")
+                    return class_id
     logger("warning", "No se encontró la clase en el HTML proporcionado.")
     return None
