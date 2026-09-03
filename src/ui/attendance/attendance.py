@@ -225,6 +225,12 @@ def get_registration_data(registration_file) -> pd.DataFrame:
     registration_data["Correo"] = registration_data["Correo"].astype(str).str.strip().str.lower()
     return registration_data
 
+# Retorna el correo ufromail si es que lo encuentra
+def select_email(emails: pd.Series) -> str:
+    for email in emails:
+        if "ufromail" in email:
+            return email
+    return emails.iloc[0]  
 
 # Unir los datos de asistencia y registro
 def merge_data(files:list) -> pd.DataFrame:
@@ -249,7 +255,8 @@ def merge_data(files:list) -> pd.DataFrame:
             merge_data = pd.concat([merge_data, var_merge_data], ignore_index=True)
     merge_data["Tiempo"] = merge_data["Tiempo"].fillna(0).astype(int) # Rellenar los valores nulos de tiempo con 0 y convertir a entero para poder comparar con el minimo de tiempo para quedar presente
     merge_data = clean_tuition_number(merge_data)
-    merge_data_final = merge_data.groupby(["Matricula", "Correo"], as_index=False).agg({
+    merge_data_final = merge_data.groupby(["Matricula"], as_index=False).agg({
+        "Correo": select_email,
         "Nombre": "first",
         "Apellido": "first",
         "Tiempo": "sum"
