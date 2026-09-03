@@ -269,7 +269,6 @@ def clean_tuition_number(merge_data) -> pd.DataFrame:
     merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r"-", r"", regex=False) #Se quitan los guiones 
     merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.replace(r"_", r"", regex=False) #Se quitan los guiones 
     merge_data['Matricula'] = merge_data['Matricula'].astype('str').str.upper() #Transforma a mayuscula
-    merge_data = merge_data[merge_data['Matricula'].str.len().isin([10, 11])]# Dejar solo las matriculas que tienen largo de 11 o 10.
     return merge_data
 
 # Unir la informacion
