@@ -1,3 +1,4 @@
+from gspread import worksheet
 import streamlit as st
 import pandas as pd
 from google.oauth2 import service_account
@@ -13,6 +14,16 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from src.db.sp_connection import SP_Handler
 
+def prepare_students_dataframe(students: pd.DataFrame) -> pd.DataFrame:
+    df = students.copy()
+    if "Matricula" in df.columns:
+        df["Matricula"] = df["Matricula"].astype(str)
+    
+    if "Estado" in df.columns and "Matricula" in df.columns:
+        df["Matricula Presente"] = df["Matricula"].where(df["Estado"] == "Presente", "")
+    
+    return df
+
 def upload_presents_spreadsheet(class_number: str, subject_module:int, subject_code:str, students:pd.DataFrame, reunion_time: str) -> bool:
     with st.spinner("Subiendo datos a Sheets..."):
         try:
@@ -24,7 +35,9 @@ def upload_presents_spreadsheet(class_number: str, subject_module:int, subject_c
 
             worksheet = format_worksheet(worksheet, total_rows) # Se formatea la hoja
 
-            gd.set_with_dataframe(worksheet, students)
+            students_transformed = prepare_students_dataframe(students)
+
+            gd.set_with_dataframe(worksheet, students_transformed, string_escaping="full")
 
             worksheet.update_acell('I3', 'Tiempo (min)') # Se actualzia la celda con titulo de tiempo
             worksheet.update_acell('I4', reunion_time) # Se actualiza la celda con el tiempo de reunion
@@ -35,7 +48,7 @@ def upload_presents_spreadsheet(class_number: str, subject_module:int, subject_c
 
 # Se arregla el formato de la hoja, como bordes negros y el centrado.
 def format_worksheet(worksheet: gspread.Worksheet, range: int) -> gspread.Worksheet:
-    worksheet.format("A1:F1", {
+    worksheet.format("A1:G1", {
                 "textFormat": {
                     "bold": True,
                     "foregroundColor": {"red": 1.0, "green": 1.0, "blue": 1.0}
@@ -44,8 +57,20 @@ def format_worksheet(worksheet: gspread.Worksheet, range: int) -> gspread.Worksh
                 "horizontalAlignment": "CENTER"
             })
 
+    # Formato de texto para columnas de matrícula (A y G)
+    worksheet.format(f"A2:A{range}", {
+        "numberFormat" : {
+            "type" : "TEXT"
+        }
+    })
+    worksheet.format(f"G2:G{range}", {
+        "numberFormat" : {
+            "type" : "TEXT"
+        }
+    })
+
     # Formato de bordes negros para toda la tabla y centrar el texto, se puede cambiar
-    worksheet.format(f"A1:F{range}", {
+    worksheet.format(f"A1:G{range}", {
         "borders": {
             "top": {"style": "SOLID"},
             "bottom": {"style": "SOLID"},
