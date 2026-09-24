@@ -3,7 +3,7 @@ from unicodedata import name
 from st_supabase_connection import SupabaseConnection, execute_query
 import streamlit as st
 
-class SP_Handler:
+class SPHandler:
     def __init__(self):
         self.client = st.connection(
             name="Supabase",

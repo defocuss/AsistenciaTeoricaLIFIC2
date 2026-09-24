@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -11,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from src.handlers.gs_handler import upload_presents_spreadsheet
-from src.db.sp_connection import SP_Handler
+from src.db.sp_connection import SPHandler
 from gsheets.gs import select_class
 
 def main():
@@ -188,15 +190,31 @@ def get_same_meeting_files(files:list) -> list:
 def get_reunion_data(registration_file) -> dict:
     registration_file.seek(0)
     registration = pd.read_csv(registration_file, header=None, skiprows=2)
-    duration = registration.iloc[1,3] # Duracion de la reunion
-    minimum_presentent_duration = int(duration)*0.9*0.5 # Minimo de duracion para quedar presente
     date = registration.iloc[1,2]
     date = reformat_date(date)
     id_reunion = registration.iloc[1,1].strip()
     subject = registration.iloc[1,0]
 
-    reunion_data = {"Duracion": duration, "Minimum": minimum_presentent_duration, "Date": date, "ID": id_reunion, "SubjectCode": subject}
+    reunion_data = {"Date": date, "ID": id_reunion, "SubjectCode": subject}
     return reunion_data
+
+def get_reunion_time(participants_files) -> list[float | float]:
+    absolute_duration = 0
+    for file in participants_files:
+        file.seek(0)
+        participants = pd.read_csv(file, header=None, skiprows=1, nrows=1)
+        duration = int(str(participants.iloc[0,3])) # Duracion de la reunion
+        print(duration)
+        absolute_duration = absolute_duration + duration
+
+    print("longitud de archivos", len(participants_files))
+    avg_duration = absolute_duration / len(participants_files)
+    avg_duration = round(avg_duration, 2)
+    minimum_presentent_duration = avg_duration * 0.9 * 0.5  # Minimo de duracion para quedar presente
+    minimum_presentent_duration = round(minimum_presentent_duration, 2)
+
+    return [avg_duration, minimum_presentent_duration]
+
 
 # Obtener los datos de asistencia correo y duracion del estudiante en la reunion
 def get_attendance_data(attendance_file) -> pd.DataFrame:
@@ -293,20 +311,28 @@ def write_merge_data(files:list, minimum_duration:int) -> pd.DataFrame:
 
 # Manejar la logica de mergear los archivos y mostrar el resultado
 def merged_handler(files:list) -> bool:
-    handler = SP_Handler()
+    handler = SPHandler()
     for file_pair in files:
         file_pair[0].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
         file_pair[1].seek(0) # Reiniciar el puntero del archivo para que se pueda leer desde el principio
+
+    participants_files = []
+    for meetings_files in files:
+        participants_files.append(meetings_files[0])
+
+    time_metrics = get_reunion_time(participants_files)
+    print(time_metrics)
+
     date = get_reunion_data(files[0][1])["Date"]
     subject_code = handler.get_signature_code(get_reunion_data(files[0][1])["SubjectCode"])
 
-    merged_data = write_merge_data(files, get_reunion_data(files[0][1])["Minimum"])
+    merged_data = write_merge_data(files, time_metrics[1])
     if merged_data is not None:
         st.write("Archivos fusionados exitosamente.")
-        show_present_students(merged_data, get_reunion_data(files[0][1])["Minimum"], date, subject_code, get_reunion_data(files[0][1])["Duracion"])
-        show_absent_students(merged_data, get_reunion_data(files[0][1])["Minimum"], date)
+        show_present_students(merged_data, time_metrics[1], date, subject_code, time_metrics[0])
+        show_absent_students(merged_data, time_metrics[1], date)
         show_merged_csv(merged_data, date)
-        show_reunion_metrics(get_reunion_metrics(merged_data, get_reunion_data(files[0][1])["Minimum"]), date, get_reunion_data(files[0][1])["Duracion"])
+        show_reunion_metrics(get_reunion_metrics(merged_data, time_metrics[1]), date, time_metrics[0])
         return True
     else:
         st.write("Error al crear el archivo mergeado.")
@@ -319,7 +345,7 @@ def show_present_students(merged_file:pd.DataFrame, minimum_duration:int, date:s
         st.write(f"### Estudiantes presentes en {subject_code}")
         st.dataframe(present_students, width='stretch')
         csv_data = present_students.to_csv(index=False).encode('utf-8')
-        handler = SP_Handler()
+        handler = SPHandler()
         modules = handler.get_modules_by_code(subject_code) # Lista de los modulos.
         col1, col2, col3 = st.columns(3)
         with col1:

@@ -7,7 +7,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.db.sp_connection import SP_Handler
+from src.db.sp_connection import SPHandler
 from src.handlers.gs_handler import upload_presents_spreadsheet
 
 @st.dialog("Seleccionar clase", dismissible=True)
@@ -23,7 +23,7 @@ def select_class(subject_code: str, subject_modules: list, students: pd.DataFram
 
 def get_clases_by_module(n_modulo:int, signature_code:str) -> list:
     try:
-        handler = SP_Handler()
+        handler = SPHandler()
         return handler.get_module_classes(n_modulo, signature_code)
     except Exception as e:
         st.error(f"Error al obtener las clases del módulo: {e}")

@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.db.sp_connection import SP_Handler
+from src.db.sp_connection import SPHandler
 
 def prepare_students_dataframe(students: pd.DataFrame) -> pd.DataFrame:
     df = students.copy()
@@ -114,7 +114,7 @@ def get_worksheet(sheet: gspread.Spreadsheet, worksheet_name: str, total_rows: i
 
 # Obtener y devolver la hoja del google sheets.
 def get_sheet(subject_module:int, subject_code:str) -> gspread.Spreadsheet:
-    handler = SP_Handler()
+    handler = SPHandler()
     url = handler.get_spreadsheet_url(subject_module, subject_code)
     client = gs_connect()
     sheet = client.open_by_url(url)

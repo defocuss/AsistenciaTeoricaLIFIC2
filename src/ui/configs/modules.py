@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.db.sp_connection import SP_Handler
+from src.db.sp_connection import SPHandler
 
 
 def main():
@@ -17,13 +17,13 @@ def main():
     st.write("Página para configuración de los módulos de cada asignatura.",
         "Selecciona la asignatura y el módulo para configurar los parámetros de asistencia.")
     
-    sp_handler = SP_Handler()
+    sp_handler = SPHandler()
 
     show_all_info(sp_handler)
 
-def show_all_info(sp_handler: SP_Handler) -> None:
-    signature_tabs = [row["abrevacion"] for row in sp_handler.get_signatures()]
-    profesors = [row["nombre"] for row in sp_handler.get_professors()]
+def show_all_info(sp_handler: SPHandler) -> None:
+    signature_tabs = sorted([row["abrevacion"] for row in sp_handler.get_signatures()])
+    profesors = sorted([row["nombre"] for row in sp_handler.get_professors()])
     if not signature_tabs:
         st.info("No hay asignaturas configuradas.")
         return
@@ -42,7 +42,7 @@ def show_all_info(sp_handler: SP_Handler) -> None:
                     del st.session_state[tab_name]
                 st.rerun()
 
-def create_data_editor(tab_name:str, profesors:list, sp_handler: SP_Handler) -> None:
+def create_data_editor(tab_name:str, profesors:list, sp_handler: SPHandler) -> None:
     return st.data_editor(
         create_data_frame(tab_name, sp_handler), 
         num_rows="dynamic", key=tab_name,
@@ -79,7 +79,7 @@ def data_editor_checkers(edited_df : pd.DataFrame) -> bool:
         output = True
     return output
 
-def create_data_frame(signature:str, sp_handler: SP_Handler) -> pd.DataFrame:
+def create_data_frame(signature:str, sp_handler: SPHandler) -> pd.DataFrame:
     modules = sp_handler.get_subject_modules(signature)
     if modules is None:
         st.error("Error al cargar los módulos.")
@@ -108,7 +108,7 @@ def create_data_frame(signature:str, sp_handler: SP_Handler) -> pd.DataFrame:
         })
     return pd.DataFrame(data)
 
-def upload_edited_data(sp_handler: SP_Handler, signature: str, edited_df: pd.DataFrame) -> None:
+def upload_edited_data(sp_handler: SPHandler, signature: str, edited_df: pd.DataFrame) -> None:
     existing_modules = sp_handler.get_subject_modules(signature)
     professors = sp_handler.get_professors()
 
@@ -124,7 +124,7 @@ def upload_edited_data(sp_handler: SP_Handler, signature: str, edited_df: pd.Dat
     
     upsert_modulo_profesor(sp_handler, edited_df, professors)
 
-def upsert_modulo_profesor(sp_handler: SP_Handler, edited_df: pd.DataFrame, professors:list) -> None:
+def upsert_modulo_profesor(sp_handler: SPHandler, edited_df: pd.DataFrame, professors:list) -> None:
     for index, row in edited_df.iterrows():
         
         if not sp_handler.drop_professors_from_module(row["id_modulo"]):
@@ -135,7 +135,7 @@ def upsert_modulo_profesor(sp_handler: SP_Handler, edited_df: pd.DataFrame, prof
         if not sp_handler.insert_professors_to_module(row["id_modulo"], id_profesores):
             break
 
-def upsert_modules(sp_handler: SP_Handler, signature: str, edited_df: pd.DataFrame) -> pd.DataFrame:
+def upsert_modules(sp_handler: SPHandler, signature: str, edited_df: pd.DataFrame) -> pd.DataFrame:
     id_asignatura = sp_handler.get_signature_id(signature)
     for index, row in edited_df.iterrows():
         payload = {
@@ -177,7 +177,7 @@ def clases_parser_out(clases_str:str, modulo: int) -> list[str]:
     clases_out.sort()
     return clases_out
 
-def delete_modules(sp_handler: SP_Handler, edited_df: pd.DataFrame, existing_modules: list) -> pd.DataFrame:
+def delete_modules(sp_handler: SPHandler, edited_df: pd.DataFrame, existing_modules: list) -> pd.DataFrame:
     existing_ids = {module["id_modulo"] for module in existing_modules}
     removed_ids = existing_ids - set(edited_df["id_modulo"].dropna())
     for id_modulo in removed_ids:

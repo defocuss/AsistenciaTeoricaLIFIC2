@@ -8,7 +8,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from src.handlers.intranet_handler import intranet_workflow
-from src.db.sp_connection import SP_Handler
+from src.db.sp_connection import SPHandler
 
 # Dialogo de ingreso de credenciales para acceder a la intranet, pide el rut, clave y la descipcion de la clase
 @st.dialog("Credenciales Intranet", dismissible=True)

@@ -7,9 +7,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from src.db.sp_connection import SP_Handler
+from src.db.sp_connection import SPHandler
 
-sp_connection = SP_Handler()
+sp_connection = SPHandler()
 
 st.logo(
     "https://i.imgur.com/YMei8p1.png",
